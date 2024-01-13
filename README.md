@@ -44,3 +44,12 @@ function WeirdInput_submit(tag) {
 ```
 
 After which we can just click submit.
+
+#### Paid Content (50 points)
+Clearly we need to flip come variable to say we are a paid user. But where? Looking for a source js file for this challenge turns out it's quite well obfuscated.
+However, if we click the submit button we see a POST request is sent, and we can inspect the payload in the Network tab.
+We see it contains an `"answer"` key, which contains a string of a JSON. Amongst the keys of this JSON is `"paid"` which is a boolean set to `false`.
+So to hack this challenge we can copy the same request, but change the `"paid"` value to `true`.
+We can do this by just right-clicking the request in the Network tab and choosing Copy > Copy as fetch.
+The `"answer"` field is in the request `"body"` and is url encoded. So look for the subsgtring `"%22paid%22%3Afalse"`, which decodes to `"paid":false` and replace it with `"%22paid%22%3Atrue"`"
+Execute the fetch command in the Console tab, then refresh the page to complete the challenge.
