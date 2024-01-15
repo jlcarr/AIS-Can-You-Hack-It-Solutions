@@ -60,9 +60,8 @@ Clicking the "Submit" button doesn't work, and looking at birthday.js we see the
 But this means we have a `sha256` hash value that will match the birthday string. With 365 possible birthdays per year, this means there are less than 36500 in the last hundred years, so we cna easily brute force a solutions.
 We can do this by running the following command in the console:
 
-```
+```JavaScript
 for(var idd=0; idd<31; idd++){
-    //console.log(dd);
     for(var imm=0;imm<=12;imm++){
         for(var iyyyy=2024;iyyyy>=1900;iyyyy--){
             var dd = String(idd).padStart(2, '0');
@@ -83,10 +82,34 @@ for(var idd=0; idd<31; idd++){
 
 And we can finish up by overriding the `Birthday_get_today` function to return the value we found:
 
-```
+```JavaScript
 function Birthday_get_today() {
     return today;
 }
 ```
 
 After which we can just click submit.
+
+#### Secure OTP (75 points)
+It seems a new random 6-digit OTP is generated every minute, and we don't have access to the phone receiving the OTP. When we try brute-forcing we're blocked, so it seems an impossible task.
+However, if we click the "Submit" button, sending a bad submit, we'll get the following hints:
+- In the console log we get the following message: `[MySecureOTP][DEBUG]: TODO REMOVE THIS: Seed is: 1705355344`, so we have the seed value for the random number generator, so if we can figure out which random number generator is being used, and how it's used to construct the OTP, then we could solve the puzzle.
+- If we send if a few bad submits we get an error message in the GUI saying `"Hint: Each digit of the OTP is chosen randomly with randint(0, 9) from left to right."`, since `randint` is a Python function we should try that.
+
+Looking through the source on `secure_otp.js` we can figure out another quick way to get the seed, with the following command in the console:
+
+```JavaScript
+console.log($("#" + SecureOTP_oid)[0]._tag.challenge.seed);
+```
+
+Now using a Python shell we can run the following command to implement the hints we received:
+
+```Python
+seed = 1705355344 # change this to whatever seed value you have
+import random
+random.seed(seed)
+print(''.join(map(str,[random.randint(0, 9) for i in range(6)])))
+```
+
+Pasting the result into the OTP box and pressing the "Submit" button completes the challenge.
+Make sure to not let the time run out between getting the `seed` value and submitting the answer.
