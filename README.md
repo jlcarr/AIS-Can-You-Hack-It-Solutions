@@ -53,3 +53,40 @@ So to hack this challenge we can copy the same request, but change the `"paid"` 
 We can do this by just right-clicking the request in the Network tab and choosing Copy > Copy as fetch.
 The `"answer"` field is in the request `"body"` and is url encoded. So look for the subsgtring `"%22paid%22%3Afalse"`, which decodes to `"paid":false` and replace it with `"%22paid%22%3Atrue"`"
 Execute the fetch command in the Console tab, then refresh the page to complete the challenge.
+
+### Programming
+#### Birthday (15 points)
+Clicking the "Submit" button doesn't work, and looking at birthday.js we see there is a `Birthday_submit` function which first checks the `sha256` hashof the current date to the birthday's hash before submitting it. Overriding this to force a submit doesn't work.
+But this means we have a `sha256` hash value that will match the birthday string. With 365 possible birthdays per year, this means there are less than 36500 in the last hundred years, so we cna easily brute force a solutions.
+We can do this by running the following command in the console:
+
+```
+for(var idd=0; idd<31; idd++){
+    //console.log(dd);
+    for(var imm=0;imm<=12;imm++){
+        for(var iyyyy=2024;iyyyy>=1900;iyyyy--){
+            var dd = String(idd).padStart(2, '0');
+            var mm = String(imm).padStart(2, '0'); //January is 0!
+            var yyyy = iyyyy;
+            today = `${mm}/${dd}/${yyyy}`;
+            
+            var result = sha256(today.toString());
+        
+            if (result === Birthday_date_hash){
+                console.log(today);
+                birthday = today;
+            }
+        }
+    }
+}
+```
+
+And we can finish up by overriding the `Birthday_get_today` function to return the value we found:
+
+```
+function Birthday_get_today() {
+    return today;
+}
+```
+
+After which we can just click submit.
