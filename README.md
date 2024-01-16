@@ -113,3 +113,34 @@ print(''.join(map(str,[random.randint(0, 9) for i in range(6)])))
 
 Pasting the result into the OTP box and pressing the "Submit" button completes the challenge.
 Make sure to not let the time run out between getting the `seed` value and submitting the answer.
+
+#### Code Breaker (150 points)
+The instructions are pretty straightforeward. After opening the problem the Console also has a messaging telling us to use `CodeBreaker_submit(code)` to submit programmatically.
+The following command will crack the code:
+
+```JavaScript
+async function break_code(){
+    var res = "0000000";
+    var score = await CodeBreaker_submit(res);
+    for(var i = 0; i < 7; i++){
+        for (var d = 0; d < 10 + 26*2; d++){
+            var v = String(d);
+            if (d >= 10) v = String.fromCharCode(d-10+'a'.charCodeAt(0));
+            if (d >= 10+26) v = String.fromCharCode(d-10-26+'A'.charCodeAt(0));
+            res = res.substring(0, i) + v + res.substring(i+1);
+            var val = await CodeBreaker_submit(res);
+            console.log(res);
+            console.log(val);
+            if (val > score){
+                score = val;
+                break;
+            }
+        }
+    }
+    console.log("Complete. Code is:");
+    console.log(res);
+    return res;
+}
+```
+
+The code will also submit, so there's nothing else to do!
