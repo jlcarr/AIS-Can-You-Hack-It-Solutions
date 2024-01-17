@@ -144,3 +144,20 @@ async function break_code(){
 ```
 
 The code will also submit, so there's nothing else to do!
+
+#### Tiles (250 points)
+Here we have a 5x5 sliding tile puzzle which needs to be solved in under 2 minutes, and with less than 350 moves. Very difficult for a human to achieve.
+As it turns out, the search space size (`(5*5)!`) makes it difficult for most search algorithms we throw at it.
+However I found using some human-style analysis to get the puzzle close to a finished state, then throwing A-star search at it works pretty well.
+
+Start off by grabbing the board state in a list-of-lists format. We can do this with the following snippet of JavaScript in the console:
+
+```
+console.log(JSON.stringify(Tiles_getGameBoard()));
+```
+
+Then use the SlidingTileSolver.ipynb Jupyter Notebook to run the algorithms for solving the problem. A description of how the algorithms work is inside the notebook.
+
+The result will be a comma-separated string of moves, with can be pasted into the input box and clicking the Submit button completes it.
+
+
