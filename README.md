@@ -160,4 +160,25 @@ Then use the SlidingTileSolver.ipynb Jupyter Notebook to run the algorithms for 
 
 The result will be a comma-separated string of moves, with can be pasted into the input box and clicking the Submit button completes it.
 
+### Networking
+#### HTTP Basic (15 points)
+The standard tools for analyzing pcaps is Wireshark. We can use the commandline tool `tshark`.
+Documentation is here: <https://www.wireshark.org/docs/man-pages/tshark.html>
+
+In particular we'll want to find all HTTP requests with a body, i.e. POST requests, and extract the body and look for the username and password.
+
+
+```
+tshark -r http-auth.cap -Y "http.request.method == POST" -T fields -e text
+```
+
+- `-r` is to read the .cap file.
+- `-Y` is the filter the packets, in this case to POST requests.
+- `-T` is specify the output format, in this case the fields
+	- `-e` is to specificly out them as plain text.
+
+From this output we can get the form values, and see the fields `"name"` and `"pass"`, from which we get out answer.
+Just past them in and click Submit.
+
+
 
