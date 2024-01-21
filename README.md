@@ -13,6 +13,7 @@ document.querySelector("button[disabled][ref='submitButton']").disabled = false;
 
 After the button is enabled, just click it.
 
+
 #### Button Clicker (15 points)
 The "Click me a lot" button needs to be clicked 1000000 times before the Submit button will be accepted.
 However looking at the Network tab in the developer tools we can see the source code for `button_clicker.js`, which shows us the number of clicks is tracked with the variable `ButtonClicker_num_clicks`.
@@ -27,6 +28,7 @@ localStorage.setItem("ButtonClicker_hacking_detected", false);
 ```
 
 Then just click submit.
+
 
 #### Weird Input (25 points)
 Every time we try to enter the requested string, the input values get changed to all `'a'`s.
@@ -45,6 +47,7 @@ function WeirdInput_submit(tag) {
 
 After which we can just click submit.
 
+
 #### Paid Content (50 points)
 Clearly we need to flip come variable to say we are a paid user. But where? Looking for a source js file for this challenge turns out it's quite well obfuscated.
 However, if we click the submit button we see a POST request is sent, and we can inspect the payload in the Network tab.
@@ -53,6 +56,7 @@ So to hack this challenge we can copy the same request, but change the `"paid"` 
 We can do this by just right-clicking the request in the Network tab and choosing Copy > Copy as fetch.
 The `"answer"` field is in the request `"body"` and is url encoded. So look for the subsgtring `"%22paid%22%3Afalse"`, which decodes to `"paid":false` and replace it with `"%22paid%22%3Atrue"`"
 Execute the fetch command in the Console tab, then refresh the page to complete the challenge.
+
 
 ### Programming
 #### Birthday (15 points)
@@ -90,6 +94,7 @@ function Birthday_get_today() {
 
 After which we can just click submit.
 
+
 #### Secure OTP (75 points)
 It seems a new random 6-digit OTP is generated every minute, and we don't have access to the phone receiving the OTP. When we try brute-forcing we're blocked, so it seems an impossible task.
 However, if we click the "Submit" button, sending a bad submit, we'll get the following hints:
@@ -113,6 +118,7 @@ print(''.join(map(str,[random.randint(0, 9) for i in range(6)])))
 
 Pasting the result into the OTP box and pressing the "Submit" button completes the challenge.
 Make sure to not let the time run out between getting the `seed` value and submitting the answer.
+
 
 #### Code Breaker (150 points)
 The instructions are pretty straightforeward. After opening the problem the Console also has a messaging telling us to use `CodeBreaker_submit(code)` to submit programmatically.
@@ -145,6 +151,7 @@ async function break_code(){
 
 The code will also submit, so there's nothing else to do!
 
+
 #### Tiles (250 points)
 Here we have a 5x5 sliding tile puzzle which needs to be solved in under 2 minutes, and with less than 350 moves. Very difficult for a human to achieve.
 As it turns out, the search space size (`(5*5)!`) makes it difficult for most search algorithms we throw at it.
@@ -159,6 +166,7 @@ console.log(JSON.stringify(Tiles_getGameBoard()));
 Then use the SlidingTileSolver.ipynb Jupyter Notebook to run the algorithms for solving the problem. A description of how the algorithms work is inside the notebook.
 
 The result will be a comma-separated string of moves, with can be pasted into the input box and clicking the Submit button completes it.
+
 
 ### Networking
 #### HTTP Basic (15 points)
@@ -177,8 +185,26 @@ tshark -r http-auth.cap -Y "http.request.method == POST" -T fields -e text
 - `-T` is specify the output format, in this case the fields
 	- `-e` is to specificly out them as plain text.
 
+Or for a more legible output:
+
+```
+tshark -r http-auth.cap -Y "http.request.method == POST" -T fields -e urlencoded-form.key -e urlencoded-form.value | python3.11 -c "import sys;[print('\n'.join(map(': '.join,zip(*[col.split(',') for col in line.split('\t')])))) for line in sys.stdin.read().splitlines()]"
+```
+
 From this output we can get the form values, and see the fields `"name"` and `"pass"`, from which we get out answer.
 Just past them in and click Submit.
 
 
+#### WPA2 Deauth
+This time we are asked to crack a WPA2 handshake from the wifi using the pcap.
+The main tool used to do this is `aircrack-ng`, though it requires a wordlist for its cracking.
+A popular choice is the RockYou password list, which can be downloaded [here](https://github.com/brannondorsey/naive-hashcat/releases/download/data/rockyou.txt).
+Afterwards just run the command:
+
+
+```
+aircrack-ng -w rockyou.txt de-auth.cap 
+```
+
+It should first present the MAC address (BSSID) and the SID (ESSID), before starting the crack, which should take a few minutes before presenting the password.
 
