@@ -233,3 +233,35 @@ print(message)
 ```
 
 Or use the FrequencyAnalysisSolver.ipynb Jupyter Notebook to accomplish the same thing, with a Matplotlib visualization of the spectrogram as well.
+
+
+### Crypto
+#### Skip Cipher (25 points)
+From the looks of the text and the title, we can conclude that to decrypt the text we need to start with the first letter (which is the only one capitalized after all), then step some number of letters before taking the next letter and repeat until we cover the entire string, wrapping as needed.
+The skip stride length should be coprime to the encrypted text so as to hit each letter once, but we can also check each possible stride.
+We can get a wordlist of common English words and check which candidate solution contains the most English words, because that's very likely our solution.
+
+Here's the Python code to solve the problem. We can also use the attached SkipCipherSolver.ipynb Jupyter Notebook as well.
+
+```Python
+cipher_text = "Irntfsnie  dp aav sgr  en toeedyleh.easosdkhndnesw a"
+n = len(cipher_text)
+
+import requests
+r = requests.get("https://www.mit.edu/~ecprice/wordlist.10000")
+#r = requests.get('https://raw.githubusercontent.com/first20hours/google-10000-english/master/google-10000-english.txt')
+wordlist = set(r.text.splitlines())
+
+plain_text = ''
+wordcount = 0
+solution_stride = 0
+for stride in range(n):
+    decoded = ''.join(cipher_text[(stride*i)%n] for i in range(n))
+    decoded_wordcount = sum(w in wordlist for w in decoded.split(' '))
+    if decoded_wordcount > wordcount:
+        wordcount = decoded_wordcount
+        solution_stride = stride
+        plain_text = decoded
+print('stride:', solution_stride)
+print(plain_text)
+```
