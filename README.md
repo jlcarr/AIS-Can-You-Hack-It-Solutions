@@ -159,7 +159,7 @@ However I found using some human-style analysis to get the puzzle close to a fin
 
 Start off by grabbing the board state in a list-of-lists format. We can do this with the following snippet of JavaScript in the console:
 
-```
+```JavaScript
 console.log(JSON.stringify(Tiles_getGameBoard()));
 ```
 
@@ -171,12 +171,12 @@ The result will be a comma-separated string of moves, with can be pasted into th
 ### Networking
 #### HTTP Basic (15 points)
 The standard tools for analyzing pcaps is Wireshark. We can use the commandline tool `tshark`.
-Documentation is here: <https://www.wireshark.org/docs/man-pages/tshark.html>
+Documentation is [here](https://www.wireshark.org/docs/man-pages/tshark.html).
 
 In particular we'll want to find all HTTP requests with a body, i.e. POST requests, and extract the body and look for the username and password.
 
 
-```
+```Bash
 tshark -r http-auth.cap -Y "http.request.method == POST" -T fields -e text
 ```
 
@@ -187,7 +187,7 @@ tshark -r http-auth.cap -Y "http.request.method == POST" -T fields -e text
 
 Or for a more legible output:
 
-```
+```Bash
 tshark -r http-auth.cap -Y "http.request.method == POST" -T fields -e urlencoded-form.key -e urlencoded-form.value | python3.11 -c "import sys;[print('\n'.join(map(': '.join,zip(*[col.split(',') for col in line.split('\t')])))) for line in sys.stdin.read().splitlines()]"
 ```
 
@@ -202,9 +202,34 @@ A popular choice is the RockYou password list, which can be downloaded [here](ht
 Afterwards just run the command:
 
 
-```
+```Bash
 aircrack-ng -w rockyou.txt de-auth.cap 
 ```
 
 It should first present the MAC address (BSSID) and the SID (ESSID), before starting the crack, which should take a few minutes before presenting the password.
 
+
+### Steganography
+#### Frequency Analysis (25 points)
+We are given a file `flagged-waveform` with no file extension, but looking at the file's binary in a hexdump, we quickly see it's starts with the file signature `RIFF` and `WAVEfmt`, indicating it's a `.wav` file, and indeed we can open it with music player apps.
+You can find a good list of file signature [here](https://en.wikipedia.org/wiki/List_of_file_signatures).
+
+```Bash
+xxd flagged-waveform | head
+```
+
+Listening to it, it sounds like a sequence of sine waves of different frequencies. And indeed if we open it with a waveform viewing tool like Audacity, we see exactly that, along with the length of each frequency section being exactly 1s.
+We can extract the sequence of frequency values using a Fourier transform tool, in particular we want some kind of spectrograph. A convenient way to to this is with Python's `scipy` library, so we can control exactly for the spectrogram is created and then we can work with the data extracted. In particular, simple converting it to ASCII gives us the flag.
+We can use the code below:
+
+```Python
+import scipy.io.wavfile
+import scipy.signal
+rate, data = scipy.io.wavfile.read('flagged-waveform')
+f, t, Sxx = scipy.signal.spectrogram(data, fs=rate, nperseg=rate, noverlap=0)
+freqs = Sxx.argmax(axis=0)
+message = ''.join(map(chr,freqs))
+print(message)
+```
+
+Or use the FrequencyAnalysisSolver.ipynb Jupyter Notebook to accomplish the same thing, with a Matplotlib visualization of the spectrogram as well.
