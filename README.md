@@ -265,3 +265,15 @@ for stride in range(n):
 print('stride:', solution_stride)
 print(plain_text)
 ```
+
+#### Encoded (75 points)
+As the hint says, the data isn't encrypted, but is encoded, several times. We need to recognize the forms of encoding in order to decode the flag.
+
+1. The given string contains only digits and letters a-f, which implies it's byte data encoded in hexadecimal. We can use Python's `bytearray.fromhex` to decode to bytes.
+2. The bytes starts with the bytes for PK, the file signature for zip files. We can use Python's `zipfile` library, which indeed shows we have a zip archive containing a file `flag.txt`, which contains our next encoded string.
+3. The string contains digits, uppercase and lowercase letters, as well as the `+` and `/` characters, which is the set of characters for base64 encoding. We can use Python's `base64` library to decode to bytes.
+4. The bytes starts with the bytes for BZhm the file signature for bzip2 compressed data. We can use Python's `bz2` library to decompress to bytes.
+5. The bytes are an ascii string for groups of space-separated strings of 1s and 0s. Clearly these represent bytes. With Python we can split the string by spaces and for each binary string interpret it as binary to integer using `int(c,2)`.
+6. Interpreting the byte string as ascii contains only digits and letters a-f, which implies it's byte data encoded in hexadecimal, same as step 1. Using Python's `bytearray.fromhex` again, gives us the flag.
+
+The EncodedSolver.ipynb Jupyter Notebook will perform all the steps, and show the outputs after each step.
