@@ -266,6 +266,7 @@ print('stride:', solution_stride)
 print(plain_text)
 ```
 
+
 #### Encoded (75 points)
 As the hint says, the data isn't encrypted, but is encoded, several times. We need to recognize the forms of encoding in order to decode the flag.
 
@@ -277,3 +278,10 @@ As the hint says, the data isn't encrypted, but is encoded, several times. We ne
 6. Interpreting the byte string as ascii contains only digits and letters a-f, which implies it's byte data encoded in hexadecimal, same as step 1. Using Python's `bytearray.fromhex` again, gives us the flag.
 
 The EncodedSolver.ipynb Jupyter Notebook will perform all the steps, and show the outputs after each step.
+
+
+#### XOR (100 points)
+Given the key is 6 characters long, that's 56,800,235,584 possibilities to try, so not impossible to bruteforce, but we can do better by going the other way with a wordlist: checking for candidate common words to recover the key from the ciphertext and check our candidate key decrypts the entire ciphertext into plaintext with common words.
+
+The code to do so is in the XORSolver.ipynb Juputer Notebook.
+
