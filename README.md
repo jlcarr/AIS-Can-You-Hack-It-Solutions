@@ -283,5 +283,55 @@ The EncodedSolver.ipynb Jupyter Notebook will perform all the steps, and show th
 #### XOR (100 points)
 Given the key is 6 characters long, that's 56,800,235,584 possibilities to try, so not impossible to bruteforce, but we can do better by going the other way with a wordlist: checking for candidate common words to recover the key from the ciphertext and check our candidate key decrypts the entire ciphertext into plaintext with common words.
 
+```Python
+ciphertext = "205c04451a31015642581e701f5a09544d351d47105e1d2949132b454d39001306580b361a50175d1970075c42561f3100434e111a351a540a424d3e1c470a5803375f13035f09701c5107481e70075b07113e35105c0c554d1c1244425e0b70275b0743003f174a0c50003910405911047e161d4e11042453520e460c2900130b5f0e22165211541e7e"
+key_len = 6
+
+hex_data = bytearray.fromhex(ciphertext)
+n = len(hex_data)
+key_reps = n//6
+
+import requests
+r = requests.get('https://raw.githubusercontent.com/first20hours/google-10000-english/master/google-10000-english.txt')
+wordlist = r.text.splitlines()
+wordset = set(wordlist)
+
+key = ''
+plaintext = ''
+matches = 0
+used_word = ''
+used_freq = 0
+for freq,word in enumerate(wordlist):
+    if len(word) >= key_len-2: # use only words, whom with their spaces, will cover the key
+        #print(word)
+        xor = f" {word} "[:key_len].encode() # use only what's needed to cover the key
+        for i in range(n-key_len): # check anywhere in the plaintext
+            candidate_key = bytes([k^c for k,c in zip(xor, hex_data[i:i+key_len])])
+            candidate_key = candidate_key[key_len-i%key_len:] + candidate_key[:key_len-i%key_len]
+            
+            candidate_plaintext = bytes([k^c for k,c in zip(candidate_key*key_reps, hex_data)]).decode()
+            candidate_matches = len(set(candidate_plaintext.lower().split(' ')) & wordset)
+            
+            if candidate_matches > matches:
+                matches = candidate_matches
+                used_word = word
+                used_freq = freq
+                plaintext = candidate_plaintext
+                key = candidate_key
+
+print(f"used word: {used_word}, freq position: {used_freq}/{len(wordlist)}, word matches: {matches}")
+print("plaintext:", plaintext)
+print("key:", key)
+```
+
 The code to do so is in the XORSolver.ipynb Juputer Notebook.
+
+### Exploitation
+#### Stack Overflow (25 points)
+The JS console gives some hints on how to test out the C code by compiling without stack protection.
+We can see in the code it uses the `gets` function to obtain input, which is a deprecated function due to it reading input indefinitely until an `EOF` character is reached. This allows us to give more data than the input buffer can take, and therefore overflow the input into other memory on the stack.
+The data which will be read into the `password` buffer will overflow into the `authenticated` variable. If we overflow too far we do hit a segmentation fault. Since the size of the `password` buffer is 12, we want to use 13 characters to change the value in `authenticated`.
+Since `authenticated` is being checked like a boolean, any value other than `0` will work to obtain success.
+
+Using the input `1234567890ab0` will fill password with the chars `"1234567890ab"` while the `char` `'0'` will be read into `authenticated`, since `authenticated` is an `int` this means `'0'` will be cast to its ASCII value 48.
 
