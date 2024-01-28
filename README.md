@@ -403,3 +403,14 @@ Which gives us this information:
 | 5 | scruffy | 4987327898009549 | 763 | 11/2019 |
 | 6 | zoidberg | 4912753912003772 | 440 | 07/2026 |
 
+#### Cross Site Scripting (75 points)
+Executing `console.log(document.cookie)` in the Console shows `admin_sess_id=flag_should_be_here%20%F0%9F%A4%94`, which is incorrect. Clearly we need to use XSS to get the true document cookie.
+Submitting changes the `src` field of the image to the value given to the "Image URL" field.
+Therefore we can inject code to escape the `src` field and use the `onerror` field of `img` tags to execute JavaScript and tell us the cookie.
+
+```HTML
+" onerror="alert(document.cookie)" dummy="
+```
+
+Once we refresh the page and reopen the challenge modal we should see an alert telling up the cookie with the true flag.
+
