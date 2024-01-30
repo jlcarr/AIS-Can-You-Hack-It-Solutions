@@ -351,7 +351,24 @@ So we can easily escape and use a UNION attack to extract data from the database
 ' UNION SELECT username,password FROM users WHERE username = 'farnsworth' --
 ```
 
-We can also extract more information about the database by first determining what flavor of SQL is being used, which in this case turns out to be SQLite, since it doesn't report an error for using the function `sqlite_version()`. It makes sense for an SQLite instance to be used for a small hacking challenge.
+Which will show use the password we're looking for, so we can then enter it to complete the challenge.
+
+#### Cross Site Scripting (75 points)
+Executing `console.log(document.cookie)` in the Console shows `admin_sess_id=flag_should_be_here%20%F0%9F%A4%94`, which is incorrect. Clearly we need to use XSS to get the true document cookie.
+Submitting changes the `src` field of the image to the value given to the "Image URL" field.
+Therefore we can inject code to escape the `src` field and use the `onerror` field of `img` tags to execute JavaScript and tell us the cookie.
+
+```HTML
+" onerror="alert(document.cookie)" dummy="
+```
+
+Once we refresh the page and reopen the challenge modal we should see an alert telling up the cookie with the true flag.
+
+#### SQL Credit Cards (100 points)
+Similar to the previous SQL challenge, however this time we need to know which column the credit card number will be under, except we don't know which that'll be.
+In fact we don't know the database schema at all, and not even the flavor of SQL, so we'll need to do a deeper look into the database.
+
+We can extract more information about the database by first determining which flavor of SQL is being used, which in this case turns out to be SQLite, since it doesn't report an error for using the function `sqlite_version()`. It makes sense for an SQLite instance to be used for a small hacking challenge.
 - [Tips For Determining SQL Flavor](https://stackoverflow.com/questions/65306224/determine-flavor-of-sql-being-used)
 - [SQL injection payloads](https://github.com/swisskyrepo/PayloadsAllTheThings/blob/master/SQL%20Injection/SQLite%20Injection.md)
 
@@ -403,14 +420,11 @@ Which gives us this information:
 | 5 | scruffy | 4987327898009549 | 763 | 11/2019 |
 | 6 | zoidberg | 4912753912003772 | 440 | 07/2026 |
 
-#### Cross Site Scripting (75 points)
-Executing `console.log(document.cookie)` in the Console shows `admin_sess_id=flag_should_be_here%20%F0%9F%A4%94`, which is incorrect. Clearly we need to use XSS to get the true document cookie.
-Submitting changes the `src` field of the image to the value given to the "Image URL" field.
-Therefore we can inject code to escape the `src` field and use the `onerror` field of `img` tags to execute JavaScript and tell us the cookie.
+We can also more directly complete the challenge:
 
-```HTML
-" onerror="alert(document.cookie)" dummy="
+```SQL
+' UNION SELECT card FROM credit_cards WHERE username='farnsworth' --
 ```
 
-Once we refresh the page and reopen the challenge modal we should see an alert telling up the cookie with the true flag.
+Which will give us the number to submit to complete the challenge.
 
