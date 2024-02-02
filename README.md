@@ -326,6 +326,29 @@ print("key:", key)
 
 The code to do so is in the XORSolver.ipynb Juputer Notebook.
 
+
+#### ENIGMA (150 points)
+To solve this problem I implemeted a very stripped down Enigma I machine simulator. 
+Here are the main resources I used to do so:
+
+- https://www.101computing.net/enigma-encoder/
+- https://cryptii.com/pipes/enigma-machine
+- https://www.cryptomuseum.com/crypto/enigma/i/
+- https://www.youtube.com/watch?v=ybkkiGtJmkM&t=923s
+- https://github.com/Wikunia/Enigma.jl/tree/master?tab=readme-ov-file
+
+The enigma machine essentially is a series of permutations, with circular offsets applied. So I found it efficient to convert into mod 26 numbers and use lookup arrays.
+
+For the crack, looking in the Console tab of the problem we see we are given some hints: the reflector is given by name, and what are obviously plugboard connections, as well as triplets of numbers fo r the ground settings and ring settings, leaving just the 3 rotors to be unknowns. Which are the ring vs ground settings is unclear, and I was given dates, which could have multiple formats: these are all easy to brute force over.
+
+The next challenge however, was choosing the candidate solution. Because the enigma machine only works on letters, there's no spaces on which to split words and check for valid words.
+I therefore implemented a trie to find non-overlapping words. A big issue was finding many small word, therefore score decryptions with mostly nonsensical short word strings. Ultimately I found the solution to was score by largest word found.
+
+In the end I got a quote as the decrypted message, submitting it, without spaces, solved it.
+
+The code to do all ths is in the ENIGMASolver.ipynb Jupyter Notebook, along with some extra notes on the implementation.
+
+
 ### Exploitation
 #### Stack Overflow (25 points)
 The JS console gives some hints on how to test out the C code by compiling without stack protection.
@@ -358,7 +381,7 @@ Executing `console.log(document.cookie)` in the Console shows `admin_sess_id=fla
 Submitting changes the `src` field of the image to the value given to the "Image URL" field.
 Therefore we can inject code to escape the `src` field and use the `onerror` field of `img` tags to execute JavaScript and tell us the cookie.
 
-```HTML
+```JavaScript
 " onerror="alert(document.cookie)" dummy="
 ```
 
@@ -398,6 +421,7 @@ and
 ```
 
 Which gives us this information:
+
 `users`
 
 | rowid | username | password |
