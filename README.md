@@ -209,6 +209,26 @@ aircrack-ng -w rockyou.txt de-auth.cap
 It should first present the MAC address (BSSID) and the SID (ESSID), before starting the crack, which should take a few minutes before presenting the password.
 
 
+### Reverse Engineering
+#### Baby's First RE (25 points)
+The standard tool for analyzing binaries is Ghidra.
+Documentation is [here](https://ghidra-sre.org/).
+
+Decompiling the `babysfirst` binary with Ghidra shows the `main` contains this code:
+
+```C
+  iVar1 = strncmp("bin-continu",(char *)&local_1c,0xb);
+  if (iVar1 == 0) {
+    puts("You did it!");
+  }
+  else {
+    puts("Nope :(");
+  }
+```
+
+So the user input is compared to the string `"bin-continu"`, which is the password.
+
+
 ### Steganography
 #### Frequency Analysis (25 points)
 We are given a file `flagged-waveform` with no file extension, but looking at the file's binary in a hexdump, we quickly see it's starts with the file signature `RIFF` and `WAVEfmt`, indicating it's a `.wav` file, and indeed we can open it with music player apps.
