@@ -229,6 +229,96 @@ Decompiling the `babysfirst` binary with Ghidra shows the `main` contains this c
 So the user input is compared to the string `"bin-continu"`, which is the password.
 
 
+#### Defeating Dr. D. Bugg (50 points)
+This time we need to figure out which capitalization of the password command "quietrobotplease" will turn out completely lower case after going through the scrambling program.
+
+If we look at the strings we will see under `DOCTOR_DASTARDLY_BUGGS_JOURNAL`
+
+```
+AAAAAAAAH
+AAAAAAAAH
+My evil plan is finally complete! My robot will destroy everything! I gave out the command for deactivation, as well as the command transmitter, but the transmitter will change any commands to be shouted at the robot! And the robot ignores any commands that are shouted at it, because it only accepts commands from polite people! I left in 2 working command capitalization combinations so that I may deactivate the robot at some point, but nobody will ever figure either of them out! Mwahahahahaha!
+Note to self (the handsome Dr. Dastardly): remember not to compile the command transmitter in debug mode when you give it away, or else your variable names will be on full display! And fix that bad habit of using strings as documentation!
+D Bugg Documentation: The scrambling is based on the formula: (n*13+7)mod16=result. The numbers 13 and 7 are crucial, so make sure nobody finds them out!
+D Bugg Documentation: Do not let users try to trick the system! Away with all wrong-length commands!
+D Bugg Documentation: This pays attention to both the value of a character and its capitalization. Twice the influences means twice the confusion! Very secure!
+```
+
+If we open the program up in Ghidra and do a little work on the main function `command_transmitter` we get the following decompile:
+
+```C
+char* command_transmitter(char *param_1)
+{
+  bool isupper;
+  char newchar;
+  char c;
+  char* __dest;
+  size_t length;
+  int curr_index;
+  int influence_index;
+  int next_index;
+  
+  __dest = (char*)malloc(16);
+  length = strlen(param_1);
+  if (length == 16) {
+    strcpy(__dest,param_1);
+    curr_index = 0;
+    influence_index = 7;
+    next_index = curr_index;
+    while (curr_index = next_index, influence_index != 0) {
+      influence_index = get_influence_index(curr_index);
+      c = param_1[influence_index];
+      isupper = char_is_uppercase(c);
+      if (isupper) {
+        newchar = switch_char_case(__dest[curr_index]);
+        __dest[curr_index] = newchar;
+      }
+      isupper = char_is_even(c);
+      next_index = influence_index;
+      if (isupper) {
+        c = switch_char_case(__dest[curr_index]);
+        __dest[curr_index] = c;
+      }
+    }
+  }
+  else {
+    __dest = fill_string_with_A(__dest);
+  }
+  return __dest;
+}
+```
+
+From here we can work things out with the circular chain of dependencies, however, at `2**16 == 65536` possible capitalizations, we can actually brute force this easily.
+
+```C
+int main()
+{
+  char* target = "quietrobotplease";
+  char sol[16+1];
+  for (int i = 0; i < (1<<16); i++)
+  {
+    strcpy(sol, target);
+    for (int j = 0; j < 16; j++)
+      if((1<<j) & i)
+        sol[j] = switch_char_case(sol[j]);
+    char* scrambled = command_transmitter(sol);
+    if (!strcmp(scrambled, target))
+      printf("%d: %s -> %.16s\n", i, sol, scrambled);
+  }
+
+  return 0;
+}
+```
+
+The code is all together with the other required decompiled functions in `command-transmitter.c`
+Which gives the following 2 solutions:
+
+```
+3270: qUIetrOBotPLease -> quietrobotplease
+62265: QuiETRobOTplEASE -> quietrobotplease
+```
+
+
 ### Steganography
 #### Frequency Analysis (25 points)
 We are given a file `flagged-waveform` with no file extension, but looking at the file's binary in a hexdump, we quickly see it's starts with the file signature `RIFF` and `WAVEfmt`, indicating it's a `.wav` file, and indeed we can open it with music player apps.
