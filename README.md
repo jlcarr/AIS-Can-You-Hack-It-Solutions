@@ -698,7 +698,76 @@ I therefore implemented a trie to find non-overlapping words. A big issue was fi
 
 In the end I got a quote as the decrypted message, submitting it, without spaces, solved it.
 
-The code to do all ths is in the ENIGMASolver.ipynb Jupyter Notebook, along with some extra notes on the implementation.
+The code to do all this is in the ENIGMASolver.ipynb Jupyter Notebook, along with some extra notes on the implementation.
+
+
+#### Ransom (250 points)
+Opening the `ransom` binary is Ghidra we see the `main` function just looks to read a file `"encrypt_me"` into a buffer to then be encrypted with the `encrypt_file` function into a new buffer, and then have the original file written over.
+
+The `encrypt_file` function is actually very simple, here is its decompile:
+
+```C
+void encrypt_file(byte *plaintext,uint length,byte *cyphertext)
+
+{
+  uint index;
+  uint i;
+  byte c;
+  
+  index = length - 1;
+  for (i = 0; i < length; i = i + 1) {
+    c = plaintext[(int)i];
+    if (c < 127) {
+      cyphertext[index] = c + 129;
+    }
+    else if (c < 129) {
+      cyphertext[index] = c;
+    }
+    else {
+      cyphertext[index] = c + 127;
+    }
+    index = index - 1;
+  }
+  return;
+}
+```
+
+As we can see each bytes is being offset (with overflow) depending on what range it's in, and put into the output buffer backwards. This is very simple and we can easily write a script to reverse it by inverting the mapping:
+
+```Python
+with open('important_company_data_backup.zip.ransomed', 'rb') as f:
+    data = f.read()
+
+bmax = 2**8
+mapping = [-1]*bmax
+for c in range(bmax):
+    if c < 127:
+        mapping[(c + 129)%bmax] = c
+    elif c < 129:
+        mapping[c] = c
+    else:
+        mapping[(c + 127)%bmax] = c
+print(mapping)
+
+decrypted_data = bytes([mapping[c] for c in data[::-1]])
+print(decrypted_data)
+```
+
+The byte data starts with the magic number `PK` indicating it is indeed a .zip file as expected. We can finish off by opening the zip file and reading its contents:
+
+```Python
+import zipfile
+import io
+
+zip_data = zipfile.ZipFile(io.BytesIO(decrypted_data), 'r')
+for name in zip_data.namelist():
+    print(f"Contents of {name}")
+    with zip_data.open(name, mode='r') as f:
+        print(f.read().decode())
+```
+
+Which shows all the company secrets, along with the flag in `flag.txt`.
+The code to do all ths is in the RansomSolver.ipynb Jupyter Notebook.
 
 
 ### Exploitation
