@@ -319,6 +319,53 @@ Which gives the following 2 solutions:
 ```
 
 
+#### Sentence Bot
+This problem can be solved quite directly ignoring most of the program's intended function.
+
+Opening the binary in Ghidra we can see the `main` function handles some commandline args before going into the `generateSentence` function, which seems to generate random sentences by picking random strings from its list of `ARTICLES` then `NOUNS` then `VERBS` before comparing to the string `"the flag is"` before going into the function `getFlag`.
+If the random string fails to match `"the flag is"` then it will instead use a random word from `PREPOSITIONS` then `PROPER_NOUN`.
+
+```C
+char * getFlag(undefined8 param_1,undefined4 param_2,undefined4 param_3,undefined4 param_4,
+              undefined4 param_5,undefined4 param_6,undefined4 param_7,undefined4 param_8)
+
+{
+  int isequal;
+  char *mac;
+  char *result;
+  size_t length;
+  
+  mac = (char *)getMac(param_1,param_2,param_3,param_4,param_5,param_6,param_7,param_8);
+  if (mac == (char *)L'\0') {
+    result = (char *)0;
+  }
+  else {
+    isequal = strcmp(mac,"de:ad:be:ef:fa:ce");
+    if ((isequal == 0) && (user_seed != 0)) {
+      puts("You win!");
+    }
+    printf("Mac Address: %s\n",mac);
+    length = strlen(mac);
+    result = xorencrypt(FLAG,17,mac,(int)length);
+    free(mac);
+  }
+  return result;
+}
+```
+
+The `getFlag` function seems to check the actual machine's MAC address with `getMac` and if it's equal to `"de:ad:be:ef:fa:ce"`, will tell you `"You win!"` before returning MAC address encrypted with the function `xorencrypt` with data located at the global `FLAG` which is then returned to complete the sentence `"the flag is"`.
+
+So we don't need to worry about the business of seeding the random number generator, all we need is to xor the data in `FLAG` with `"de:ad:be:ef:fa:ce"`, which are both length 17.
+We can actually use Ghidra's Python scripting to do this for us:
+
+```Python
+FLAG_addr = currentProgram.getSymbolTable().getGlobalSymbols('FLAG')[0].getAddress()
+FLAG_data = getDataAt(FLAG_addr).getBytes()
+print(''.join(chr(i^ord(c)) for i,c in zip(FLAG_data,"de:ad:be:ef:fa:ce")))
+```
+
+Which gives us the password.
+
 ### Steganography
 #### Frequency Analysis (25 points)
 We are given a file `flagged-waveform` with no file extension, but looking at the file's binary in a hexdump, we quickly see it's starts with the file signature `RIFF` and `WAVEfmt`, indicating it's a `.wav` file, and indeed we can open it with music player apps.
