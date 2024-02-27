@@ -319,7 +319,7 @@ Which gives the following 2 solutions:
 ```
 
 
-#### Sentence Bot
+#### Sentence Bot (100 points)
 This problem can be solved quite directly ignoring most of the program's intended function.
 
 Opening the binary in Ghidra we can see the `main` function handles some commandline args before going into the `generateSentence` function, which seems to generate random sentences by picking random strings from its list of `ARTICLES` then `NOUNS` then `VERBS` before comparing to the string `"the flag is"` before going into the function `getFlag`.
@@ -365,6 +365,201 @@ print(''.join(chr(i^ord(c)) for i,c in zip(FLAG_data,"de:ad:be:ef:fa:ce")))
 ```
 
 Which gives us the password.
+
+
+#### Defuse (250 points)
+Opening up the binary in Ghidra we see in the `main` function that it is split up into 4 phases, and similarly our input on the site has 4 fields.
+
+**Phase 1** is in `phase_unlock` function which we can see in the decompiled code contains a user input and a string comparison:
+
+```C
+strcmp_result = strcmp(user_input,"Linus-Torva1");
+```
+
+So the first password is just the plain string `"Linus-Torva1"`.
+
+**Phase 2** is in the `phase_disarm` which we can see takes user input, and also checks for a `cntrl_z` to be executed by the user to stop the timer. We can ignore this for our solving. The user input is then checked in `check_disarm`.
+
+```C
+bool check_disarm(char *param_1)
+
+{
+  bool result;
+  uint i;
+  int matches;
+  int unscrambled_wires [7];
+  int input_wires [7];
+  int k;
+  int j;
+  
+  i = 0;
+  do {
+    *(undefined4 *)((int)input_wires + i) = 0;
+    i = i + 4;
+  } while (i < 28);
+  i = 0;
+  do {
+    *(undefined4 *)((int)unscrambled_wires + i) = 0;
+    i = i + 4;
+  } while (i < 28);
+  matches = __isoc99_sscanf(param_1,"%d %d %d %d %d %d %d",input_wires);
+  if (matches == 7) {
+    for (j = 0; j < 7; j = j + 1) {
+      if ((6 < input_wires[j]) || (input_wires[j] < 0)) {
+        return false;
+      }
+      unscrambled_wires[j] = *(int *)(wire_cut_sequence + input_wires[j] * 4);
+    }
+    for (k = 0; k < 6; k = k + 1) {
+      if (unscrambled_wires[k + 1] < unscrambled_wires[k]) {
+        return false;
+      }
+    }
+    result = true;
+  }
+  else {
+    result = false;
+  }
+  return result;
+}
+```
+
+We can see from the decompiled code that 7 `int`s from the user input are read into `input_wires`, the must be between 0 and 6 inclusive, and are used to index into `wire_cut_sequence` and finally we check the unscrambled order is not decreasing. I don't see why from the code we couldn't just put the same number, but the site doesn't accept it as an answer. 
+So what is the order? In Ghidra we can double click on the global data label `wire_cut_sequence` and read the contents easily enough, but we can also use Python scripting in Ghidra to do it for us:
+
+```Python
+import struct
+wire_cut_sequence_addr = currentProgram.getSymbolTable().getGlobalSymbols('wire_cut_sequence')[0].getAddress()
+wire_cut_sequence_data = getDataAt(wire_cut_sequence_addr).getBytes()
+wire_cut_sequence_values = struct.unpack("<iiiiiii", wire_cut_sequence_data)
+sorted_wire_cut_sequence = sorted(enumerate(wire_cut_sequence_values), key=lambda wire:wire[1])
+wire_cut_sequence = [wire[0] for wire in sorted_wire_cut_sequence]
+print(' '.join(map(str,wire_cut_sequence)))
+```
+
+Which gives us the answer for phase 2.
+
+**Phase 3** is in `phase_reverse`, which again takes user input.
+
+```C
+void phase_reverse(void)
+
+{
+  int input3;
+  int input2;
+  int input1;
+  int sum;
+  int matches;
+  
+  read_input();
+  input3 = 0;
+  matches = __isoc99_sscanf(user_input,"%d %d %d",&input1,&input2,&input3);
+  if (matches != 3) {
+    puts("NOT ENOUGH NUMBERS!");
+    explode();
+  }
+  if (((input1 < 0) || (input2 < 0)) || (input3 < 0)) {
+    puts("NEGATIVE!");
+    explode();
+  }
+  sum = input3 + input1 + input2;
+  if (sum != -1) {
+    puts("NOT NEGATIVE ENOUGH!");
+    explode();
+  }
+  return;
+}
+```
+
+The program takes 3 `int`s as input, none of them can be negative, however they must sum to -1. How can this be? With integer overflow! Checking the type by hovering over the `int`s we can see they are `signed int`s of lenth 4, meaning they are signed 32 bit `int`s.
+
+-1 as a signed 32 bit `int` is all `1`s in binary: i.e. `-1 == 0b11111111 11111111 11111111 11111111 == 0xffffffff`.
+
+So an easy way to do this is to use our first 2 number to put the 1 in the leading bit, then the third to fill the rest as the largest positive number.
+
+- `0b01000000 00000000 00000000 00000000 == 0x40000000 == 1073741824`
+- `0b01000000 00000000 00000000 00000000 == 0x40000000 == 1073741824`
+- `0b01111111 11111111 11111111 11111111 == 0x7FFFFFFF == 2147483647`
+
+We can check out answer in Python with Numpy fairly easily:
+
+```Python
+import numpy as np
+np.int32(1073741824) +np.int32(1073741824) + np.int32(2147483647)
+```
+
+Which indeed overflows to -1.
+
+**Phase 4** is in `phase_disposal` which requires us to do some buffer overflow.
+
+```C
+void phase_disposal(void)
+
+{
+  int scheck;
+  char uinput [8];
+  int i;
+  
+  uinput[7] = '\0';
+  uinput[6] = '\0';
+  uinput[0] = '\0';
+  uinput[1] = '\0';
+  uinput[2] = '\0';
+  uinput[3] = '\0';
+  uinput[4] = '\0';
+  uinput[5] = '\0';
+LAB_0804a080:
+  while( true ) {
+    if (4 < attempts) {
+      explode();
+      return;
+    }
+    attempts = attempts + 1;
+    if (2 < attempts) {
+      puts("You\'re getting low on attempts. Bomb disposal robot will play you a relaxing song");
+      for (i = 0; i < 10; i = i + 1) {
+        printf("BING!\a ");
+        fflush((FILE *)stdout);
+        usleep(100000);
+      }
+      puts("You are now relaxed.\n");
+    }
+    printf("\n\tAttempt: %d/%d\n",attempts,4);
+    printf("\tCheck light: %d\n",(int)uinput[6]);
+    printf("\tDisposal Mode: %d\n\n",(int)uinput[7]);
+    printf("$ ");
+    gets(uinput);
+    if ((uinput[6] == 'E') && (scheck = strncmp(uinput,"le$s-d",6), scheck == 0)) break;
+    puts("disposal robot malfunction");
+  }
+  if (uinput[7] == 'G') {
+    return;
+  }
+  if (uinput[7] < 'H') {
+    if (uinput[7] == 'F') {
+      puts("Robot F mode. Beep boop what\'s this do?");
+      goto LAB_0804a080;
+    }
+    if ('F' < uinput[7]) goto LAB_0804a07b;
+    if (uinput[7] == 0) {
+      puts("Disposal mode not changed!");
+      goto LAB_0804a080;
+    }
+    if (uinput[7] == 'D') {
+      puts("Robot D mode. Boop beep. The 10th Fibonacci number is 55.");
+      goto LAB_0804a080;
+    }
+  }
+LAB_0804a07b:
+  explode();
+  goto LAB_0804a080;
+}
+```
+
+The decompilation can be a little tricky because some `char`s of the user input are also cast to `int`s for the `printf`s. However noticing there is only one `gets`, which is unsafe, to get the userinput we can be sure that treating the buffer as `char[8]` makes everything as clean as possible.
+So what should the user input be? Well the first thing we see is `strncmp(uinput,"le$s-d",6)` so the first 6 characters must be `"le$s-d"`, but also we have the comparison `uinput[6] == 'E'`. Finally we see later on to exit the function we require the condition `uinput[7] == 'G'`.
+All together this makes `"le$s-dEG"` which is the final password.
+
 
 ### Steganography
 #### Frequency Analysis (25 points)
