@@ -561,6 +561,580 @@ So what should the user input be? Well the first thing we see is `strncmp(uinput
 All together this makes `"le$s-dEG"` which is the final password.
 
 
+#### Debug Me
+This challenge was far harder than any of the previous reverse engineering challenges, or any of the other challenges in general (except perhaps "Hidden Pictures").
+
+Before starting anything, I'm just going to say I couldn't solve it with static analysis alone: if someone has solved it with static analysis I'd love to learn how you did it. So to run it, as is best practice, you'll need a VM. We can find out the specs we need by running the file command:
+
+```bash
+file debugme
+```
+
+Which tells us we an x86-64 Linux machine. Now we can start.
+
+Opening up the `debugme` binary in Ghidra the decompilation is far from clean. We see things like `CONCAT71`, `UNRECOVERED_JUMPTABLE`, few functions and few strings. This is pretty hard to interpret.
+However amongst the defined strings we see `"$Info: This file is packed with the     executable packer http://   .sf.net $"` and `"$Id:     3.96 Copyright (C) 1996-2020 the     Team. All Rights Reserved. $"`. What's especially interesting is this string seems censored. If we Google either of them we quickly find these are messages from the tool UPX, which is an executable packer, and often used for code obfuscation. The tool is open source, and can also be used to unpack executables, so let's do that, using the same version: 3.96.
+
+- <https://upx.github.io/>
+- <https://github.com/upx/upx/releases/tag/v3.96>
+
+```bash
+wget https://github.com/upx/upx/releases/download/v3.96/upx-3.96-amd64_linux.tar.xz
+tar -xf upx-3.96-amd64_linux.tar.xz
+mv upx-3.96-amd64_linux/upx .
+./upx -d debugme -o debugme_unpacked
+```
+
+However this gives an error message: `upx: debugme: NotPackedException: not packed by UPX`. But how can this be? Surely it is packed with UPX if it has the string in it saying it is? But notice the string has been tampered with: the name UPX was removed after all! Perhaps more tampering has been done to make the the UPX unpacker fail? Clearly we wouldn't ahve tampering that would break the executable itself, so perhaps we can recover it?
+
+Thankfully Nozomi Networks has a free and open source tool for repairing tampered UPX files.
+
+- <https://www.nozominetworks.com/blog/automatic-restoration-of-corrupted-upx-packed-samples>
+- <https://github.com/NozomiNetworks/upx-recovery-tool>
+
+```bash
+git clone https://github.com/NozomiNetworks/upx-recovery-tool.git
+cd upx-recovery-tool
+sudo apt-get install libmagic1
+python3 -m pip install -r requirements.txt
+python3 upxrecovertool.py -i ../debugme -o ../debugme_repaired
+cd ..
+```
+
+Now we should be able to unpack it:
+
+```bash
+./upx -d debugme_repaired -o debugme_unpacked
+```
+
+Success! But don't celebrate too quickly: opening the unpacked binary in Ghidra we see inside the `entry` function we only see `FUN_004ad590`, and checking it gives us a decompile fail message: `Low-level Error: Overlapping input varnodes`. Clearly we're just getting started.
+
+So how do we proceed? Well, if we look in the strings, we'll see there's a lot more contents. If we actually run the binary we'll see a few, which we can find in Ghidra:
+
+- `0x0055c008`: `"I'm thinking of a number between 1 and 300000."`
+- `0x0055c038`: `"Guess it and I'll give up my secrets."`
+- `0x0055c060`: `"I don't think you understand how numbers work..."`
+- `0x0055c0f8`: `"Nope! Next time, try concentrating harder."`
+
+Looking at their references in Ghidra, we can see each is referenced once in the function `FUN_00404080`, where they are always used as inputs to the function `FUN_004d3720`. So `FUN_00404080` appears to be our main function, and `FUN_004d3720` appears to be some sort of `print` function.
+
+I have tried a variety of techniques for automating the function identification. Because the executable is statically compiled, it includes all its library functions' code, and hence why it's over a megabyte despite how little it actually does. Looking at the strings we can see evidence of the standard C library there. I have tried Ghidra's built-in Function ID functionality, using additional .fidb files from this [repo](https://github.com/threatrack/ghidra-fidb-repo) (see also [this](https://blog.threatrack.de/2019/09/20/ghidra-fid-generator/), and [this](https://www.youtube.com/watch?v=P8Ul2K7pEfU&list=PLXqdTlog3E_8Ucym6klVOY9RmjdIy3cbm&index=12)). I have tried FLIRT signatures using the Python script implementation from this [repo](https://github.com/NWMonster/ApplySig) and .sig files from this [repo](https://github.com/push0ebp/sig-database). However the functions calls our main `FUN_00404080` remain unidentified. So instead we can guess based on the signatures and inputs/outputs, as well as attach the debugger to help check the inputs and outputs: here's my mapping:
+
+- `FUN_00404080` -> `RE_main`: Because this is where the main logic is happening.
+- `FUN_004d3720` -> `RE_puts`: Because it takes in strings it writes to stdout, but no string size, or stream file handle. (documentation [here](https://man7.org/linux/man-pages/man3/puts.3.html))
+- `FUN_004d2a30` -> `RE_fgets`: Because the user input read happens right after the prompt write before any other logic, the signature matches and there is the check for returning NULL on error. (documentation [here](https://man7.org/linux/man-pages/man3/fgets.3.html))
+   - We can also double check in the GDB debugger by placing a breakpoint after the read and checking the contents matches your input:
+   1. `gdb ./debugme_unpacked` open the executable in GDB
+   2. `(gdb) b *0x0040419e` Set the breakpoint after the call so we can check the result.
+   3. `(gdb) r` run the executable with the debugger.
+   4. Give input when prompted as normal with debugme.
+   5. Breakpoint will be hit.
+   6. `(gdb) printf "%s", $rax` This will print the result as a string. You should see your input.
+- `FUN_004ccb80` -> `RE_strtoul`: Besides making sense to extract the value after reading the string, the second input being the NULL pointer is standard, and we see base 10 as the final input, and the returned value is then used for checks corresponding to the 1-3000000 given bounds. (documentation [here](https://man7.org/linux/man-pages/man3/strtoul.3.html))
+   - Again we can also double check in GDB:
+   1. `gdb ./debugme_unpacked`
+   2. `(gdb) b *0x004041b6` Set the breakpoint after the call so we can check the result.
+   3. `(gdb) r` run the executable with the debugger.
+   4. Give input when prompted as normal with debugme.
+   5. Breakpoint will be hit.
+   6. `(gdb) p $rax` This will print the result register. You should see your input.
+- `FUNC004d5ce0` -> `RE_fputc`: We shall see later that this makes sense. (documentation [here](https://man7.org/linux/man-pages/man3/puts.3.html))
+
+
+```C
+undefined8 RE_main(void)
+
+{
+  char *input_ptr;
+  ulong input_value;
+  char c_enc;
+  long in_FS_OFFSET;
+  char input_str [40];
+  long local_30;
+  long counter;
+  
+  local_30 = *(long *)(in_FS_OFFSET + 0x28);
+  do {
+    counter = FUN_004c54b0();
+  } while (counter != 8);
+  do {
+    counter = FUN_004c54b0();
+  } while (counter != 8);
+  RE_puts("I\'m thinking of a number between 1 and 3000000.");
+  RE_puts("Guess it and I\'ll give up my secrets.");
+  input_ptr = RE_fgets(input_str,32,(FILE *)PTR_DAT_005bbc18);
+  if (input_ptr == (char *)0x0) {
+    FUN_004c5320(0);
+  }
+  else {
+    input_value = RE_strtoul(input_str,(char **)0x0,10);
+    if (2999999 < input_value - 1) {
+      RE_puts("I don\'t think you understand how numbers work...");
+      goto LAB_00404231;
+    }
+    if ((_DAT_005bd368 ^ 3000001) == input_value) {
+      c_enc = 'S';
+      counter = 0;
+      do {
+        c_enc = c_enc ^ (&DAT_0055c098)[counter];
+        RE_fputc(c_enc,(FILE *)PTR_DAT_005bbc10);
+        c_enc = (&DAT_0055c0c9)[counter];
+        counter = counter + 1;
+      } while (c_enc != '\0');
+      RE_fputc('\n',(FILE *)PTR_DAT_005bbc10);
+      goto LAB_00404231;
+    }
+  }
+  RE_puts("Nope! Next time, try concentrating harder.");
+LAB_00404231:
+  if (local_30 == *(long *)(in_FS_OFFSET + 0x28)) {
+    return 0;
+  }
+                    /* WARNING: Subroutine does not return */
+  FUN_0051dea0();
+}
+```
+
+So it seems our `input_value` is compared against the expression `(_DAT_005bd368 ^ 3000001)`, so this should be the number we need to guess. However, if we attach the debugger, and check the compared values, which happens at instruction `0x004041ca`, we see the value it's being compared to is often a garbage far outside the 1-3000000 range. If this test fails, we get the `"Nope!"` message, so we can use the debugger to ensure we pass the test:
+
+1. `gdb ./debugme_unpacked`
+2. `(gdb) b *0x004041ca` Set the breakpoint at the test.
+3. `(gdb) r` Run the executable.
+4. Enter any input when prompted.
+5. The breakpoint will then be hit.
+6. `(gdb) x/i $pc` Print the current instruction to verify it's the comparison.
+7. `(gdb) p $rax` Print your input.
+8. `(gdb) p (unsigned long)$rbp` Print the value your input is being compared to.
+9. `(gdb) set $rax=$rbp` Set your input value to the value it's being compared to.
+10. `(gdb) cont` Continue the execution.
+11. We get the following output: `No fair! I refuse to help out a cheater.`
+
+Now this is interesting. Not only was our attempt at fudging the results detected, but if we search for the `"No fair!"` string, it doesn't appear in the binary: it must be encrypted or obfuscated. We see a loop after the check in which values taken from `DAT_0055c098` and `DAT_0055c0c9` are XORed together: could these be the string? Looking in the listing, they're in the .data section, with high entropy, but also seem to have some ASCII values sprinkled in, also they're adjacent. Seems likely. We can check easily in Ghidra using Python scripting:
+
+```Python
+addr1, addr2 = (0x55c098, 0x0055c0c9-1)
+print(''.join(chr(getByte(toAddr(addr1+i)) ^ getByte(toAddr(addr2+i))) for i in range(addr2-addr1)))
+```
+
+Sure enough we get the decrypted string, terminated by null bytes. But where do we go from here? Well, since this data was XOR encrypted, perhaps there is other hidden data, maybe the flag? We can easily check all pairs start strings, and search efficiently for english words. This exploration was fruitful, and I've shown more in detail in the DebugMeSolver.ipynb Jupyter Notebook. Here are the resultant strings:
+
+- `0x55c1c0`-`0x55c1e0`: `"/proc/self/status"`
+- `0x55c1e0`-`0x55c1f0`: `"TracerPid:"`
+- `0x55c210`-`0x55c240`: `"I'm thinking of a number between 1 and 3000000."`
+- `0x55c240`-`0x55c270`: `"Guess it and I'll give up my secrets."`
+- `0x55c270`-`0x55c2b0`: `"I don't think you understand how numbers work..."`
+- `0x55c2b0`-`0x55c300`: `"Are you trying to influence me? Your Jedi mind tricks are no good here."`
+- `0x55c320`-`0x55c360`: `"Hmm, that doesn't SEEM like an answer I'd give..."`
+- `0x55c370`-`0x55c390`: `"Wow! You must be psychic!"`
+- `0x55c390`-`0x55c3e0`: `"Looks like you messed something up, I can't calculate the flag properly!"`
+- `0x55c3e0`-`0x55c400`: `"flag{DebuggerXordinaire-%X-%X}"`
+- `0x55c400`-`0x55c440`: `"Here you go, but keep in mind that the flag is time-sensitive."`
+- `0x55c440`-`0x55c470`: `"Nope! Next time, try concentrating harder."`
+
+In the end we get what looks like the printf format for the flag `"flag{DebuggerXordinaire-%X-%X}"` (submitting this is not accepted), as well as a few other interesting strings. But in particular extra copies of all the string we recognize from our `RE_main` function: there's a second copy somewhere else, what does this mean?
+
+The executable is detecting when we attach a debugger and flipping into a honeypot mode mimicking the original behaviour, but without giving up the flag as a possibility. There are several ways we can discover this:
+
+- If we attach the debugger in the middle of execution, (i.e. after being prompted for input) we'll see it is already being traced.
+   1. `./debugme_unpacked`
+   2. Wait for the input prompt but leave it.
+   3. Switch to another terminal, leaving the first one hanging.
+   4. `pgrep debugme | xargs -I {} gdb --pid` Attach the debugger to the running process by using `pgrep` to search for its process id, and then using it attach `gdb`, using `xargs` to pass the argument.
+   5. We see an error message of the form `Warning process {x} is already traced by process {y}`
+   6. If we search for this process id with `ps -ef` we'll see it is the parent bash process.
+- If we run with `strace` we see a call to `openat` with the file path of `"/proc/self/status"`, and then a `read` where we see the expected contents. This is presumably to check for the `"TracerPid"` parameter, which when non-zero implies it is being traced.
+   - `strace ./debugme_unpacked` 
+   - We can find both `"/proc/self/status"` and `"TracerPid"` amongst our XOR encrypted strings, and they are beside eachother in the .data section.
+- If we patch the strings in the binary we can see the different ones used when we attach vs detach the debugger. See below.
+
+Here are a few good resources on anti-debugging techniques, particularly for Linux:
+
+- <https://github.com/yo-yo-yo-jbo/anti_debugging_intro/>
+- <https://github.com/yellowbyte/analysis-of-anti-analysis/blob/develop/research/hiding_call_to_ptrace/hiding_call_to_ptrace.md>
+- <https://linuxsecurity.com/features/anti-debugging-for-noobs-part-1>
+- <https://dev.to/nuculabs_dev/bypassing-ptrace-calls-with-ldpreload-on-linux-12jl>
+- <https://seblau.github.io/posts/linux-anti-debugging>
+- <https://github.com/BarakAharoni/LADD>
+
+Now, to tell if the debugger has been detected we can patch the binary: we can update the strings so they are marked differently depending on which state the program is in. We can do this in Python like so:
+
+```Python
+with open('debugme_unpacked', 'rb') as f:
+   data = bytearray(f.read())
+
+xorkey_0 = 23 # The first byte of the XOR key
+offset = 0x400000
+addrs = [
+   (0x0055c008, 0x55c210), # "I'm thinking..."
+   (0x0055c038, 0x55c240), # "Guess..."
+   (0x0055c060, 0x55c270), # "I don't..."
+   (0x0055c0f8, 0x55c440), # "Nope..."
+]
+
+for debug,xorvl in addrs:
+   data[debug-offset] = ord('0')
+   data[xorvl-offset] = ord('1') ^ xorkey_0
+
+with open('debugme_marked', 'wb') as f:
+   f.write(data)
+
+```
+
+And indeed running `./debugme_marked` vs `gdb ./debugme_marked` we see the `'1'` vs `'0'` markers at the start of each string. So what should we do from here? Well we're set up nicely to try to disable the ant-debugging measures and check that we are successful.
+
+From our previous analysis with `strace` and trying to attach `gdb` midway through execution we can tell that the logic is first it checks `"/proc/self/status"` for `"TracerPid"` to see if it is already being traced, if so flips to honeypot, if not attempts to call `ptrace` on itself and if that fails also flip to the honeypot. So let's start by seeing if patching the binary again to this time try to disrupt the use of `"TracerId"`.
+
+```Python
+with open('debugme_marked', 'rb') as f:
+   data = bytearray(f.read())
+
+xorkey_0 = 23 # The first byte of the XOR key
+offset = 0x400000
+
+data[0x55c1e0-offset] = ord('_') ^ xorkey_0
+
+with open('debugme_notracerid', 'wb') as f:
+   f.write(data)
+```
+
+Now when we run `strace ./debugme_notracerid` we see there is a syscall to `ptrace`, in fact it is `ptrace(PTRACE_PTRACEME)` meaning it is asking its parent process to trace it, and we can't attach the debugger midway through still. So we disabled the first check for `"TracerPid"` successfully, but we still need to disable the syscall to `ptrace`. How can we do this? We should start by finding the syscall to `ptrace`. I haven't been able to tell if an obfuscated `<sys/ptrace.h>` is present in the code, however all we need is the syscall itself. Ghidra has a great script, `ResolveX86orX64LinuxSyscallsScript.java` which does exactly what the name implies: it resolves all the instances of `syscall()` in the decompilation and adds comments in the `SYSCALL` listing to the Linux syscall used. Now when we search for `ptrace` in the Functions in Ghidra we see it is present and there is 1 reference: `FUN_0051b6d0:0051b72c`. Again I am not sure what this `FUN_0051b6d0` is, but we can see the results of the `ptrace` function are being checked. So we should read the documention on `ptrace` to understand its expected return value, [here](https://man7.org/linux/man-pages/man2/ptrace.2.html). We see with the argument of enum `PTRACE_TRACEME` the rest of the arguments are ignored, so that's good. For the return value, we see it is `-1` on error (e.g. already being traced), but doesn't specify any other values for `PTRACE_TRACEME`. So what if we patch the binary to replace the syscall to simply write a non-negative value to the function output since that's the only thing expected.
+
+The output of a function call or syscall in x86 assembly is placed in the `rax` register. So we'll want to set its value. There are many ways to do this, but here is a flexible one:
+
+```Assembler
+mov %rax,0x0
+```
+
+But we need the bytes representation to patch the binary. How can we get this? There are several ways, arguably the best using the `gcc` compiler for the x86-64 architecture itself. A popular online resource for this is [godbolt](https://godbolt.org/), as well as [defuse](https://defuse.ca/online-x86-assembler.htm). See the `gcc` documentation [here](https://gcc.gnu.org/onlinedocs/gcc/Overall-Options.html) and the `objdump` documentation [here](https://man7.org/linux/man-pages/man1/objdump.1.html), as well as some guides on x86-64 assembly language [here](https://web.stanford.edu/class/cs107/guide/x86-64.html), [here](https://imada.sdu.dk/u/kslarsen/dm546/Material/IntelnATT.htm) and [here](https://en.wikibooks.org/wiki/X86_Assembly).
+
+```bash
+echo 'mov %rax,0' | gcc -c -x assembler -o asm.o - && objdump -dw asm.o
+```
+
+This command will take a single line of assembler, `mov %rax,0`, and pipe it to `gcc`, since we're reading from `stdin` via `-` we need to specify language `-x assembler`, and we need to specify we're only compiling `-c`, not linking, and we'll place it in a temporary output `-o asm.o`, before we use `objdump` to dissassemble the temporary obj file to get the byte representation of the main line we passed `-d asm.o`, and its more legible in wide format `-w`.
+
+This gives us `0x48 0x89 0x04 0x25 0x00 0x00 0x00 0x00`. This is 8 bytes and looking at the syscall in Ghidra's listing at `0x0051b72c` we see it is only 2 bytes. The instruction above is `mov %eax,0x65`, which sets the lower 32 bits of `rax`, and takes 5 bits. So we'll need a shorter way. We could try simply patching out the syscall with `nop`s and see if it will be accepted.
+
+```bash
+echo 'nop' | gcc -c -x assembler -o asm.o - && objdump -dw asm.o
+```
+
+This shows us that the single byte code for `nop`, "no operation", is `0x90`. We could have also just Googled this.
+
+```Python
+with open('debugme_notracerid', 'rb') as f:
+   data = bytearray(f.read())
+
+addr = 0x0051b72c
+offset = 0x400000
+
+data[addr-offset:addr-offset+2] = [0x90,0x90]
+
+with open('debugme_noptrace', 'wb') as f:
+   f.write(data)
+```
+
+And now when we run `./debugme_noptrace`, `gdb ./debugme_noptrace` and `strace ./debugme_noptrace` we see there is no syscall to `ptrace` anymore, and even better, the program no longer detects the debugger and no longer flips to the honeypot mode. One last note I'd like to add here is that it seems to also check if the environment variable `LD_PRELOAD` is set and will flip to honeypot mode if it is. This is because `LD_PRELOAD` is used to preload libraries and can be used to override `ptrace`, though it doesn't seem to work on the statically linked and syscalled `ptrace` of `debugme`. We can patch the binary to prevent it from detecting the `LD_PRELOAD` environment variable, but we don't need to. More information on this approach can be found [here](https://dev.to/nuculabs_dev/bypassing-ptrace-calls-with-ldpreload-on-linux-12jl), [here](https://seblau.github.io/posts/linux-anti-debugging), and in the links above on anti-debugging in Linux.
+
+So now we are able to attach the debugger without being detected, what's next? Well we have the references to where the hidden strings, including the template for the flag, were used before. Let's investigate. Interestingly, all the hidden strings start addresses are each referenced once, in the function `FUN_00404280`. We can get this more clearly with Ghidra scripting:
+
+```Python
+xorkey = [23, 69, 15, 28, 184, 234, 14, 82, 120, 130, 5, 31, 5, 151, 27, 164, 49, 23, 94, 205, 226, 199, 138, 75, 226, 75, 115, 52, 199, 9, 19, 252, 171, 163, 17, 231, 28, 26, 231, 19, 140, 116, 129, 23, 25, 87, 219, 173, 165, 150, 215, 104, 166, 236, 132, 58, 246, 156, 145, 4, 187, 191, 133, 122, 127, 154, 120, 231, 32, 117, 184, 14, 0, 193, 124, 17, 237, 174, 105, 236]
+xor_string_addrs = ['0x55c1c0', '0x55c1e0', '0x55c210', '0x55c240', '0x55c270', '0x55c2b0', '0x55c320', '0x55c370', '0x55c390', '0x55c3e0', '0x55c400', '0x55c440']
+xor_string_refs = []
+
+for addr in xor_string_addrs:
+   addr = toAddr(int(addr,16))
+   xref = getReferencesTo(addr)[0].getFromAddress()
+   plaintext = ''.join(chr(getByte(addr.add(i)) & 0xFF ^ c) for i,c in enumerate(xorkey)).split(chr(0))[0]
+   xor_string_refs.append((xref, addr, plaintext))
+   print('- {}:{} -> {} "{}"'.format(getFunctionContaining(xref), xref, addr, plaintext))
+```
+
+Note we need to copy over the XOR key and string addresses from the analysis we did the in the Jupyter Notebook. The result gives us:
+
+- `FUN_00404280`:`0x004042cd` -> `0x0055c1c0` `"/proc/self/status"`
+- `FUN_00404280`:`0x004044ef` -> `0x0055c1e0` `"TracerPid:"`
+- `FUN_00404280`:`0x00404858` -> `0x0055c210` `"I'm thinking of a number between 1 and 3000000."`
+- `FUN_00404280`:`0x00404946` -> `0x0055c240` `"Guess it and I'll give up my secrets."`
+- `FUN_00404280`:`0x00404e88` -> `0x0055c270` `"I don't think you understand how numbers work..."`
+- `FUN_00404280`:`0x00405047` -> `0x0055c2b0` `"Are you trying to influence me? Your Jedi mind tricks are no good here."`
+- `FUN_00404280`:`0x004052fe` -> `0x0055c320` `"Hmm, that doesn't SEEM like an answer I'd give..."`
+- `FUN_00404280`:`0x004054bb` -> `0x0055c370` `"Wow! You must be psychic!"`
+- `FUN_00404280`:`0x00405752` -> `0x0055c390` `"Looks like you messed something up, I can't calculate the flag properly!"`
+- `FUN_00404280`:`0x00405837` -> `0x0055c3e0` `"flag{DebuggerXordinaire-%X-%X}"`
+- `FUN_00404280`:`0x00405933` -> `0x0055c400` `"Here you go, but keep in mind that the flag is time-sensitive."`
+- `FUN_00404280`:`0x00404bce` -> `0x0055c440` `"Nope! Next time, try concentrating harder."`
+
+So `FUN_00404280` is probably our true `main` function, so we can rename it `RE_true_main`. Looking at its decompile in Ghidra, it looks very convoluted and obfuscated still, with lots of blocks of `CONCAT44`, `^`, addressing and indexing, so I won't post the raw decompile code here, but I'll talk about what patterns there are and how we can make sense of it.
+
+We do see several of the `RE_puts` we identified in from the honeypot section, and even a section by `0x00404a85` which contains `RE_puts`, then `RE_fgets`, then `RE_strtoul`, and even `if (2999999 < uVar11 - 1)`, just like in the honeypot! Furthermore we notice similar patterns of data moving (addressing, indexing, `CONCAT44`) and XORing `^` before each `RE_puts`, so presumably these much be the decrypting blocks. One thing we can do is use Ghidra Python scripting to get the order of these known function call, then use `gdb` to set breakpoints on each call and check the inputs, so we can label them apropriately.
+
+```Python
+RE_true_main = getFunctionAt(toAddr(0x00404280))
+called_functions = list(getFunctionAt(toAddr(0x00404280)).getCalledFunctions(ghidra.util.task.TaskMonitor.DUMMY))
+print(called_functions)
+known_called_functions = [f for f in called_functions if f.getName().startswith('RE')]
+print(known_called_functions)
+RE_true_main_known_calls = sorted([(xref.getFromAddress(), f) for f in known_called_functions for xref in getReferencesTo(f.getEntryPoint()) if getFunctionContaining(xref.getFromAddress()) == RE_true_main])
+print(RE_true_main_known_calls)
+
+RE_true_main_order = sorted(xor_string_refs + RE_true_main_known_calls)
+for event in RE_true_main_order:
+   if isinstance(event[-1],str):
+      print('- {}: load {}:"{}"'.format(*event))
+   else:
+      print('- {}: call {}'.format(*event))
+
+# We can create a gdb command file for the breakpoints
+with open('breakpoint_RE_true_main_known_calls.gdb', 'w') as f:
+   for event in RE_true_main_known_calls:
+      f.write('b *0x{}'.format(event[0]))
+```
+
+Which shows us:
+
+- `004042cd`: load `0055c1c0`:`"/proc/self/status"`
+- `004044ef`: load `0055c1e0`:`"TracerPid:"`
+- `00404858`: load `0055c210`:`"I'm thinking of a number between 1 and 3000000."`
+- `00404941`: call `RE_puts`
+- `00404946`: load `0055c240`:`"Guess it and I'll give up my secrets."`
+- `00404a85`: call `RE_puts`
+- `00404aa6`: call `RE_fgets`
+- `00404ac0`: call `RE_strtoul`
+- `00404bce`: load `0055c440`:`"Nope! Next time, try concentrating harder."`
+- `00404cdb`: call `RE_puts`
+- `00404d0c`: call `RE_strtoul`
+- `00404e88`: load `0055c270`:`"I don't think you understand how numbers work..."`
+- `00404fd6`: call `RE_puts`
+- `00405047`: load `0055c2b0`:`"Are you trying to influence me? Your Jedi mind tricks are no good here."`
+- `00405204`: call `RE_puts`
+- `004052fe`: load `0055c320`:`"Hmm, that doesn't SEEM like an answer I'd give..."`
+- `0040544a`: call `RE_puts`
+- `004054bb`: load `0055c370`:`"Wow! You must be psychic!"`
+- `0040559f`: call `RE_puts`
+- `00405752`: load `0055c390`:`"Looks like you messed something up, I can't calculate the flag properly!"`
+- `004057d2`: call `RE_puts`
+- `00405837`: load `0055c3e0`:`"flag{DebuggerXordinaire-%X-%X}"`
+- `00405933`: load `0055c400`:`"Here you go, but keep in mind that the flag is time-sensitive."`
+- `00405ae5`: call `RE_puts`
+- `00405aed`: call `RE_puts`
+
+We can be pretty certain of which `RE_puts` calls correspond to which strings, but we can double check with `gdb`:
+
+1. `gdb ./debugme_noptrace`
+2. `(gdb) source breakpoint_RE_true_main_known_calls.gdb`
+3. `(gdb) r`
+4. Breakpoint hit `0x00404941`
+5. `(gdb) printf "%s", $rdi` Sure enough shows `"I'm thinking of a number between 1 and 3000000."`
+6. `(gdb) cont`
+7. Breakpoint hit `0x00404a85`
+8. `(gdb) printf "%s", $rdi` Sure enough shows `"Guess it and I'll give up my secrets."`
+9. `(gdb) cont`
+10. Breakpoint hit `0x00404aa6`
+11. `(gdb) cont`
+12. Give any input. Here I'll assume valid input, but you can check the other path as well.
+13. Breakpoint hit `0x00404ac0`
+14. `(gdb) printf "%s", $rdi` Sure enough shows the input you gave.
+15. `(gdb) nexti` Continue over the call to get the result.
+16. `(gdb) p $rax` We can see the result of the function call indeed turned out input string into an `unsigned long` value.
+17. `(gdb) cont`
+18. Breakpoint hit `0x0055c440`
+19. `(gdb) printf "%s", $rdi` Sure enough shows `"Nope! Next time, try concentrating harder."`
+
+Given our confirmations we can comment each of these `RE_puts` calls in Ghidra with their known strings. We can even do this programmatically with Ghidra Python scripting:
+
+```Python
+PRE_COMMENT = ghidra.program.model.listing.CodeUnit.PRE_COMMENT
+string_stack = []
+for event in RE_true_main_order:
+   if isinstance(event[-1],str):
+      string_stack.append(event)
+   elif event[-1].getName() == 'RE_puts':
+      currentProgram.getListing().getCodeUnitAt(event[0]).setComment(PRE_COMMENT, 'print "{}"'.format(string_stack.pop()[-1]))
+
+```
+
+Now reading through the strings and looking at the logic we can fill in a few more pieces. In particular some guesses for some functions. Here is a cleaned up and stripped down version of the decompile of the main logic of the program:
+
+- `FUN_004c5320` -> `RE_exit`: Because after its call the program exits, and the exit code of `0` is a commonly seen call in C programs. (documentation [here](https://man7.org/linux/man-pages/man3/exit.3.html))
+   - We can verify with `gdb`
+   1. `gdb ./debugme_noptrace`
+   2. `(gdb) b *0x00404fdd`
+   3. `(gdb) r`
+   4. Give a non-numerical answer.
+   5. Breakpoint hit.
+   6. `(gdb) nexti` to run the function call without entering it.
+   7. You will see the program exits. It does not return after the call.
+- `FUN_004c54b0` -> `RE_getrandom`: Because if we look carefully it's used before random values are needed, and the syscall for `getrandom` is used inside. (documentation [here](https://man7.org/linux/man-pages/man2/getrandom.2.html))
+
+```C
+    do {
+      num_bytes_filled = RE_getrandom(dest_buffer,8,0);
+      target_number = random_value;
+    } while (num_bytes_filled != 8);
+    counter = 10;
+    input_value = 0;
+    do {
+      do {
+        num_bytes_filled = RE_getrandom(dest_buffer,8,0);
+      } while (num_bytes_filled != 8);
+      if (target_number == random_value) goto LAB_00404e25;
+      input_value = input_value + random_value;
+      counter = counter + -1;
+    } while (counter != 0);
+    if (input_value < 10000) {
+LAB_00404e25:
+      target_number = 3000001;
+    }
+    else {
+      do {
+        num_bytes_filled = RE_getrandom(dest_buffer,8,0);
+        target_number = random_value;
+      } while (num_bytes_filled != 8);
+      do {
+        num_bytes_filled = RE_getrandom(dest_buffer,8,0);
+      } while (num_bytes_filled != 8);
+      target_number = (long)(random_value * target_number) % 3000000 + 1;
+      DAT_005bd320 = DAT_005bd320 ^ target_number;
+      target_number = target_number ^ _DAT_005bd368;
+    }
+                    /* print "I'm thinking of a number between 1 and 3000000." */
+    RE_puts(&print_buffer);
+                    /* print "Guess it and I'll give up my secrets." */
+    RE_puts(&print_buffer);
+    input_ptr = RE_fgets(input_str,32,(FILE *)PTR_DAT_005bbc18);
+    if (input_ptr != (char *)0x0) {
+      input_value = RE_strtoul(input_str,(char **)0x0,10);
+      if (2999999 < input_value - 1) {
+                    /* print "I don't think you understand how numbers work..." */
+        RE_puts(&print_buffer);
+        RE_exit(0);
+      }
+      if (target_number == 3000001) {
+                    /* print "Are you trying to influence me? Your Jedi mind tricks are no good
+                       here." */
+        RE_puts(&print_buffer);
+        RE_exit(0);
+      }
+      else {
+        input_value_copy = input_value;
+        if (input_value != (target_number ^ _DAT_005bd368)) {
+                    /* print "Nope! Next time, try concentrating harder." */
+          RE_puts(&print_buffer);
+          goto LAB_00404ce0;
+        }
+      }
+      if (input_value_copy != (DAT_005bd320 ^ DAT_005bd370)) {
+                    /* print "Hmm, that doesn't SEEM like an answer I'd give..." */
+        RE_puts(&print_buffer);
+        RE_exit(0);
+      }
+                    /* print "Wow! You must be psychic!" */
+      RE_puts(&print_buffer);
+      if (DAT_005bd328 != 32) {
+                    /* print "Looks like you messed something up, I can't calculate the flag
+                       properly!" */
+        RE_puts(&print_buffer);
+        RE_exit(0);
+      }
+                    /* print "Here you go, but keep in mind that the flag is time-sensitive." */
+      RE_puts(&print_buffer);
+                    /* print "flag{DebuggerXordinaire-%X-%X}" */
+      RE_puts(input_str);
+    }
+LAB_00404ce0:
+    RE_exit(0);
+```
+
+So the logic is essentially:
+
+1. Generate random numbers repeatedly, ensure we don't have repeats so there isn't tampering with the random number generator.
+2. Get the target number in range using the random values `target_number = (long)(random_value * target_number) % 3000000 + 1;`
+3. Store one XOR encrypted copy in `DAT_005bd320`, and XOR encrypt the target number with `_DAT_005bd368`.
+4. Get the input and verify it is a number in range.
+5. Check the tampering. Report and exit if it was.
+6. Verify the input against the temporarily decrypted value. Report and exit if we guessed wrong.
+7. Verify the input again against the previous copy to see if we changed it. Report and exit if it was.
+8. A final check to calculate the flag, I don't understand.
+9. Compute the flag.
+10. Report the flag.
+
+If we read the decompile, assembler in the listing, or use the debugger, we will find there is a bug: the target value computed in is using signed division (`IDIV`) on randomely generated bytes which should have been treated as an `unsigned long` to get the remainder mod 3000000. We see this with a typecast in the decompile, `target_number = (long)(random_value * target_number) % 3000000 + 1;`. This means we have about a 50% chance of the target number being negative, and therefore ofside of the range are allowed to guess. I suspect this bug is on purpose for the challenge called "debugme".
+
+1. `gdb ./debugme_noptrace`
+2. `(gdb) b *0x004047cc`
+3. `(gdb) r`
+4. Breakpoint hit.
+5. `(gdb) p $r13` We can see sometimes has a negative value. Just run through and try again if it doesn't.
+
+Note we can also use the above debug process to win by knowing the number in case we get a proper target number. However we know the flag is time sensitive. Now whether that is using time differences to compute the valid flag, or we have to submit the flag quickly, I'm not sure. Regardless, we should try to patch the binary to ensure a quick win when running it:
+
+We'll want to take the XOR encrypted value, stored in `%r13`, then decode it the value in `_DAT_005bd368`, which we need to access by relative indexing from the instruction pointer. We'll need to overwrite the input read as well as the attempt to convert the input from `char*` to `unsigned long`, i.e. `0x00404aa6` to `0x00404ad8`. The `mov` and `xor` operations will take a 3 and 7 bytes respectively for a total of 10 bytes, making our offset: `hex(0x005bd368-(0x00404aa6+10))` = `0x1b88b8`.
+
+```Assembler
+mov %r13, %rcx
+xor 0x1b88b8(%rip),%rcx
+```
+
+```Bash
+echo 'mov %r13, %rcx;' > patch.asm
+echo 'xor 0x1b88b8(%rip),%rcx;' >> patch.asm
+gcc -c -o asm.o patch.asm
+objdump -dw asm.o | tail -n 2 | grep -o '\b[a-z0-9][a-z0-9]\b' | sed 's/^/0x/' | paste -s -d,
+# as a one-liner
+echo 'mov %r13,%rcx; xor 0x1b88b8(%rip),%rcx' | gcc -c -x assembler -o asm.o - && objdump -dw asm.o | tail -n 2 | grep -o '\b[a-z0-9][a-z0-9]\b' | sed 's/^/0x/' | paste -s -d,
+```
+
+```Python
+with open('debugme_noptrace', 'rb') as f:
+   data = bytearray(f.read())
+
+start_addr = 0x00404aa6
+end_addr = 0x00404ad8
+offset = 0x400000
+
+new_instr = [
+   0x4c, 0x89, 0xe9,
+   0x48, 0x33, 0x0d, 0xb8, 0x88, 0x1b, 0x00
+]
+
+l = end_addr-start_addr
+data[start_addr-offset:start_addr-offset+l] = new_instr + [0x90]*(l - len(new_instr))
+
+with open('debugme_solution', 'wb') as f:
+   f.write(data)
+```
+
+Now when we run `./debugme_solution` we immediately get the solution without having to give any input. Submitting the result solve the problem.
+
+I think places for improvement are a better way to automatically resolve the libc functions, a more thorough analysis on the encryption code and how it could be cleaned up in Ghidra, and better insight into how the debugger detection code actually works, as well as the function of the other code blocks left unanalyzed in the main functions.
+
+As a finale, here is a shortest complete script for solving this challenge:
+
+```Bash
+wget https://hack.ainfosec.com/static/hackerchallenge/bin/debugme/debugme
+
+git clone https://github.com/NozomiNetworks/upx-recovery-tool.git
+cd upx-recovery-tool
+sudo apt-get install libmagic1
+python3 -m pip install -r requirements.txt
+python3 upxrecovertool.py -i ../debugme -o ../debugme
+cd ..
+
+wget https://github.com/upx/upx/releases/download/v3.96/upx-3.96-amd64_linux.tar.xz
+tar -xf upx-3.96-amd64_linux.tar.xz
+mv upx-3.96-amd64_linux/upx .
+./upx -d debugme
+
+printf '\x4c\x89\xe9\x48\x33\x0d\xb8\x88\x1b\x00' | dd of=debugme bs=1 seek=$((0x404aa6-0x400000)) count=10 conv=notrunc
+printf '\x90%.0s' $(seq $((0x404ad8-0x404aa6-10))) | dd of=debugme bs=1 seek=$((0x404aa6-0x400000+10)) count=$((0x404ad8-0x404aa6-10)) conv=notrunc
+
+chmod u+x debugme
+./debugme
+```
+
+
 ### Steganography
 #### Frequency Analysis (25 points)
 We are given a file `flagged-waveform` with no file extension, but looking at the file's binary in a hexdump, we quickly see it's starts with the file signature `RIFF` and `WAVEfmt`, indicating it's a `.wav` file, and indeed we can open it with music player apps.
