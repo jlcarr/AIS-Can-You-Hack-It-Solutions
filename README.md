@@ -570,7 +570,7 @@ Before starting anything, I'm just going to say I couldn't solve it with static 
 file debugme
 ```
 
-Which tells us we an x86-64 Linux machine. Now we can start.
+Which tells us we need an x86-64 Linux machine. Now we can start.
 
 Opening up the `debugme` binary in Ghidra the decompilation is far from clean. We see things like `CONCAT71`, `UNRECOVERED_JUMPTABLE`, few functions and few strings. This is pretty hard to interpret.
 However amongst the defined strings we see `"$Info: This file is packed with the     executable packer http://   .sf.net $"` and `"$Id:     3.96 Copyright (C) 1996-2020 the     Team. All Rights Reserved. $"`. What's especially interesting is this string seems censored. If we Google either of them we quickly find these are messages from the tool UPX, which is an executable packer, and often used for code obfuscation. The tool is open source, and can also be used to unpack executables, so let's do that, using the same version: 3.96.
@@ -585,7 +585,7 @@ mv upx-3.96-amd64_linux/upx .
 ./upx -d debugme -o debugme_unpacked
 ```
 
-However this gives an error message: `upx: debugme: NotPackedException: not packed by UPX`. But how can this be? Surely it is packed with UPX if it has the string in it saying it is? But notice the string has been tampered with: the name UPX was removed after all! Perhaps more tampering has been done to make the the UPX unpacker fail? Clearly we wouldn't ahve tampering that would break the executable itself, so perhaps we can recover it?
+However this gives an error message: `upx: debugme: NotPackedException: not packed by UPX`. But how can this be? Surely it is packed with UPX if it has the string in it saying it is? But notice the string has been tampered with: the name UPX was removed after all! Perhaps more tampering has been done to make the the UPX unpacker fail? Clearly we wouldn't have tampering that would break the executable itself, so perhaps we can recover it?
 
 Thankfully Nozomi Networks has a free and open source tool for repairing tampered UPX files.
 
@@ -755,6 +755,15 @@ Here are a few good resources on anti-debugging techniques, particularly for Lin
 - <https://dev.to/nuculabs_dev/bypassing-ptrace-calls-with-ldpreload-on-linux-12jl>
 - <https://seblau.github.io/posts/linux-anti-debugging>
 - <https://github.com/BarakAharoni/LADD>
+- <https://github.com/hexabeast/Sytrace?tab=readme-ov-file>
+- <https://7rocky.github.io/en/ctf/htb-challenges/reversing/anti-flag/>
+- <https://lifeinhex.com/solving-0x777hs-crackme/>
+- <https://www.youtube.com/watch?v=eyHFuTi59k4>
+- <https://anti-debug.checkpoint.com/techniques/assembly.html>
+- <https://www.deepinstinct.com/blog/common-anti-debugging-techniques-in-the-malware-landscape>
+- <https://www.youtube.com/watch?v=RCgEIBfnTEI>
+- <https://mrt4ntr4.github.io/JustCTF-debugme/>
+- <https://www.youtube.com/watch?v=CgGha_zLqlo>
 
 Now, to tell if the debugger has been detected we can patch the binary: we can update the strings so they are marked differently depending on which state the program is in. We can do this in Python like so:
 
@@ -1159,6 +1168,39 @@ print(message)
 ```
 
 Or use the FrequencyAnalysisSolver.ipynb Jupyter Notebook to accomplish the same thing, with a Matplotlib visualization of the spectrogram as well.
+
+
+#### Hidden Pictures (75 points)
+We are given a file `FlagTime.bmp` which contains a simple black and white image. If we Google steganography for images, we'll quickly come across the concept of LSB (Least Significant Bit) steganography, in which the least significant bit on each color channel for each pixel is used to contain hidden information: the least significant bit will not alter the pixels significantly, hence why it's used. There are a variefy of ways we can check LSB of our image, but regardless of how we do it, we indeed it doesn't look how we would expect it compared to the other bits in each pixel and color channel, and so indeed there is some hidden information there.
+
+Now how can extract and decode it? There are a variety of ways we could order the bits and reconstitute them into bytes with big or little endianness, and then check for either text or files within the reconstituted data. We could implement this in Python with Pillow, Numpy, itertools and python-magic (the filetype identification library), however we can also use the popular tool which has implemented all of this and more or us, zsteg, which runs on ruby.
+
+```Bash
+sudo apt install ruby
+sudo apt install zsteg
+```
+
+We can see a list of hits for zsteg with:
+
+```Bash
+zsteg FlagTime.bmp
+```
+
+Which gives us mostly garbage strings and unlikely file types, but the top hit is another bitmap image of size `40 * 36 * 24`: the likelihood to have a properly constructed header for this kind of file is low, so this is almost certainly a correct hit. It also reports the encoding `b1,lsb,bY` meaning 1 bit of each byte used `b1`, pack to bytes with little endianness `lsb`, and read the bytes in with the Y coordinates flipped `bY`. This especially makes sense since .bmp files actually start from the lower left corner and go left-right, "bottom-up", unlike most pixel indexing schemes. See more information on .bmp files [here](https://en.wikipedia.org/wiki/BMP_file_format). Given all this, we can extrace the hidden picture like so:
+
+```Bash
+zsteg -E b1,lsb,bY FlagTime.bmp > hidden.bmp
+```
+
+The image we get looks like noise, with with some interesting characteristics, like a distinct top border. Clearly there is more hidden in this image. If we look at the bytes in a hexdump we'll see the following that the reserved bits of the header contain the word "FAKE", but also afterwards we see "BMP" and later "FLAG". Looks like another hidden picture is directly inside the pixels. We can again use zsteg, which will remport another bitmap in the `imagedata`.
+
+```Bash
+xxd hidden.bmp | head
+zsteg hidden.bmp
+zsteg -E imagedata hidden.bmp > flag.bmp
+```
+
+In my flag.bmp I now see the final flag text written out in different colors, and is a reference to the pictures within pictures being a "matryoshka". Submitting it solves the challenge.
 
 
 ### Crypto
