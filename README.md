@@ -1,6 +1,52 @@
 # AIS-Can-You-Hack-It-Solutions
 Solutions to the AIS Can You Hack It challenges.
 
+Link here: <https://hack.ainfosec.com/>
+
+The page says "Score a total of 700 points to unlock the ability to submit your score. Your score submission and email will be sent directly to AIS and someone will be in touch."
+I completed every challenge for a total of 2685 points and submitted my score, and over a month later was never reached out to. I think we can safely assume the challenges are no longer being used as a recruitment tool and are now just for fun: therefore I think it is ethical to share my solutions for learning purposes. If this is not correct, simply reach out and I'll make the repo private once more.
+
+
+## Table of Contents
+
+- [Client-side Protections](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#client-side-protections) (100 points total)
+    - [Disabled](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#disabled-10-points) (10 points)
+    - [Button Clicker](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#button-clicker-15-points) (15 points)
+    - [Weird Input](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#weird-input-25-points) (25 points)
+    - [Paid Content](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#paid-content-50-points) (50 points)
+- [Programming](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#programming) (490 points total)
+    - [Birthday](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#birthday-15-points) (15 points)
+    - [Secure OTP](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#secure-otp-75-points) (75 points)
+    - [Code Breaker](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#code-breaker-150-points) (150 points)
+    - [Tiles](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#tiles-250-points) (250 points)
+- [Networking](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#networking) (45 points total)
+    - [HTTP Basic](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#http-basic-15-points) (15 points)
+    - [WPA2 Deauth](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#wpa2-deauth-30-points) (30 points)
+- [Reverse Engineering](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#reverse-engineering) (925 points total)
+    - [Baby's First RE](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#babys-first-re-25-points) (25 points)
+    - [Defeating Dr. D. Bugg](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#defeating-dr-d-bugg-50-points) (50 points)
+    - [Sentence Bot](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#sentence-bot-100-points) (100 points)
+    - [Defuse](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#defuse-250-points) (250 points)
+    - [Debug Me](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#debug-me-500-points) (500 points)
+- [Steganography](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#steganography) (100 points total)
+    - [Frequency Analysis](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#frequency-analysis-25-points) (25 points)
+    - [Hidden Pictures](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#hidden-pictures-75-points) (75 points)
+- [Crypto](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#crypto) (600 points total)
+    - [Skip Cipher](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#skip-cipher-25-points) (25 points)
+    - [Encoded](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#encoded-75-points) (75 points)
+    - [XOR](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#xor-100-points) (100 points)
+    - [ENGIMA](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#enigma-150-points) (150 points)
+    - [Ransom](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#ransom-250-points) (250 points)
+- [Exploitation](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#exploitation) (200 points total)
+    - [Stack Overflow](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#stack-overflow-25-points) (25 points)
+    - [Lonely Bot](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#lonely-bot-175-points) (175 points)
+- [Input Validation](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#input-validation) (225 points total)
+    - [SQL Login](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#sql-login-50-points) (50 points)
+    - [Cross Site Scripting](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#cross-site-scripting-75-points) (75 points)
+    - [SQL Credit Cards](https://github.com/jlcarr/AIS-Can-You-Hack-It-Solutions#sql-credit-cards-100-points) (100 points)
+
+
+
 ## Solutions
 ### Client-side Protections
 #### Disabled (10 points)
@@ -195,7 +241,7 @@ From this output we can get the form values, and see the fields `"name"` and `"p
 Just past them in and click Submit.
 
 
-#### WPA2 Deauth
+#### WPA2 Deauth (30 points)
 This time we are asked to crack a WPA2 handshake from the wifi using the pcap.
 The main tool used to do this is `aircrack-ng`, though it requires a wordlist for its cracking.
 A popular choice is the RockYou password list, which can be downloaded [here](https://github.com/brannondorsey/naive-hashcat/releases/download/data/rockyou.txt).
@@ -561,7 +607,7 @@ So what should the user input be? Well the first thing we see is `strncmp(uinput
 All together this makes `"le$s-dEG"` which is the final password.
 
 
-#### Debug Me
+#### Debug Me (500 points)
 This challenge was far harder than any of the previous reverse engineering challenges, or any of the other challenges in general (except perhaps "Hidden Pictures").
 
 Before starting anything, I'm just going to say I couldn't solve it with static analysis alone: if someone has solved it with static analysis I'd love to learn how you did it. So to run it, as is best practice, you'll need a VM. We can find out the specs we need by running the file command:
