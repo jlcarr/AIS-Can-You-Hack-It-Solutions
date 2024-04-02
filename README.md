@@ -1,11 +1,17 @@
 # AIS-Can-You-Hack-It-Solutions
 Solutions to the AIS Can You Hack It challenges.
 
+## Introduction
 Link here: <https://hack.ainfosec.com/>
 
 The page says "Score a total of 700 points to unlock the ability to submit your score. Your score submission and email will be sent directly to AIS and someone will be in touch."
 I completed every challenge for a total of 2685 points and submitted my score, and over a month later was never reached out to. I think we can safely assume the challenges are no longer being used as a recruitment tool and are now just for fun: therefore I think it is ethical to share my solutions for learning purposes. If this is not correct, simply reach out and I'll make the repo private once more.
 
+Here is a list of other repos I found with solutions:
+
+- https://github.com/ganlvtech/can-you-hack-it/tree/master
+- https://github.com/razcristea/AIS-challenges
+- https://github.com/tzwukerf/canyouhackit2023
 
 ## Table of Contents
 
